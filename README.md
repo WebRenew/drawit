@@ -50,18 +50,16 @@ Chat with the AI assistant to create complex diagrams:
 - pnpm (recommended) or npm
 
 ### Environment Variables
-
-\`\`\`env
+```bash
 # AI Gateway (required for AI features)
 AI_GATEWAY_API_KEY=your_api_key
 
 # Vercel Blob (for chat history persistence & image uploads)
 BLOB_READ_WRITE_TOKEN=your_blob_token
-\`\`\`
+```
 
 ### Installation
-
-\`\`\`bash
+```bash
 # Clone the repository
 git clone <repo-url>
 cd drawit
@@ -71,13 +69,12 @@ pnpm install
 
 # Run development server
 pnpm dev
-\`\`\`
+```
 
 Open [http://localhost:3000](http://localhost:3000) to start drawing.
 
 ## Project Structure
-
-\`\`\`
+```
 ├── app/
 │   ├── api/
 │   │   ├── ai-chat/        # AI chat endpoint with tool definitions
@@ -98,7 +95,7 @@ Open [http://localhost:3000](http://localhost:3000) to start drawing.
 │   └── types.ts            # TypeScript type definitions
 └── scripts/
     └── 001_init.sql        # Database initialization
-\`\`\`
+```
 
 ## AI Tools
 
@@ -124,25 +121,25 @@ The AI assistant supports the following tools:
 ## Usage Examples
 
 ### Create a Flowchart
-\`\`\`
+```
 "Create a user authentication flowchart with login, validation, and success/failure paths"
-\`\`\`
+```
 
 ### Create an Org Chart
-\`\`\`
+```
 "Create an org chart with John as CEO, with 3 VPs reporting to him"
-\`\`\`
+```
 
 ### Recreate from Image
 Upload an image of a diagram and ask:
-\`\`\`
+```
 "Recreate this diagram on the canvas"
-\`\`\`
+```
 
 ### Create a Molecular Structure
-\`\`\`
+```
 "Draw a water molecule (H2O)"
-\`\`\`
+```
 
 ## License
 
