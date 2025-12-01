@@ -260,6 +260,7 @@ export function AIChatPanel({ onPreviewChange, canvasDimensions, onElementsCreat
                 const localData = JSON.parse(localHistory)
                 if (localData.messages && Array.isArray(localData.messages) && localData.messages.length > 0) {
                   console.log("[v0] Loaded chat history from localStorage:", localData.messages.length, "messages")
+                  console.log("[v0] Message roles:", localData.messages.map((m: any) => m.role))
                   setMessages(localData.messages)
                 }
               } catch {
@@ -268,6 +269,7 @@ export function AIChatPanel({ onPreviewChange, canvasDimensions, onElementsCreat
             }
           } else if (data.messages && Array.isArray(data.messages) && data.messages.length > 0) {
             console.log("[v0] Loaded chat history from Blob:", data.messages.length, "messages")
+            console.log("[v0] Message roles:", data.messages.map((m: any) => m.role))
             setMessages(data.messages)
           }
         } else {
@@ -314,16 +316,36 @@ export function AIChatPanel({ onPreviewChange, canvasDimensions, onElementsCreat
     if (messages.length === 0) return
 
     // Serialize messages for comparison and storage
-    // Filter out any non-serializable parts
+    // Filter out tool-related parts but keep text, file, and reasoning parts
     const serializableMessages = messages.map((msg) => {
       const anyMsg = msg as any
+      
+      // Filter parts to only serializable types (text, file, reasoning)
+      // Exclude tool-* parts as they contain non-serializable data
+      const serializableParts = msg.parts?.filter((part) => {
+        return part.type === "text" || part.type === "file" || part.type === "reasoning"
+      }).map((part) => {
+        // For file parts, ensure we have the URL
+        if (part.type === "file") {
+          const filePart = part as any
+          return {
+            type: "file",
+            url: filePart.url,
+            filename: filePart.filename,
+            mimeType: filePart.mimeType,
+          }
+        }
+        return part
+      })
+      
       return {
         id: msg.id,
         role: msg.role,
-        content: anyMsg.content,
+        // For assistant messages, content might be in parts; for user, might be string
+        content: anyMsg.content || "",
         createdAt: anyMsg.createdAt instanceof Date ? anyMsg.createdAt.toISOString() : anyMsg.createdAt,
-        // Only include parts if they exist and are serializable
-        ...(msg.parts && { parts: msg.parts.filter((part) => part.type === "text" || part.type === "reasoning") }),
+        // Include serializable parts
+        ...(serializableParts && serializableParts.length > 0 && { parts: serializableParts }),
       }
     })
 
@@ -332,6 +354,9 @@ export function AIChatPanel({ onPreviewChange, canvasDimensions, onElementsCreat
     lastSaveRef.current = messagesJson
 
     const timeoutId = setTimeout(async () => {
+      // Debug: log what we're saving
+      console.log("[v0] Saving messages:", serializableMessages.length, "roles:", serializableMessages.map(m => m.role))
+      
       // Always save to localStorage as backup
       try {
         localStorage.setItem(CHAT_HISTORY_LOCAL_KEY, JSON.stringify({
