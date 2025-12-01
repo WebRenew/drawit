@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     siteName: "Drawit",
     images: [
       {
-        url: "/og",
+        url: "/og.png",
         width: 1200,
         height: 630,
         alt: "Drawit - AI-powered diagrams, flowcharts & wireframes",
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Drawit - AI-Powered Whiteboard",
     description: "An AI powered tool to create diagrams, flowcharts and wireframes. Made in v0 by Webrenew.",
-    images: ["/og"],
+    images: ["/og.png"],
   },
   icons: {
     icon: [
