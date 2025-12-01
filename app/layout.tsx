@@ -7,10 +7,35 @@ import { ThemeProvider } from "@/components/theme-provider"
 const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://drawit.sh"
+
 export const metadata: Metadata = {
-  title: "Drawit - Collaborative Whiteboard",
-  description: "Real-time collaborative drawing application",
+  title: "Drawit - AI-Powered Whiteboard",
+  description: "An AI powered tool to create diagrams, flowcharts and wireframes. Made in v0 by Webrenew.",
   generator: "v0.app",
+  metadataBase: new URL(siteUrl),
+  openGraph: {
+    title: "Drawit - AI-Powered Whiteboard",
+    description: "An AI powered tool to create diagrams, flowcharts and wireframes. Made in v0 by Webrenew.",
+    url: siteUrl,
+    siteName: "Drawit",
+    images: [
+      {
+        url: "/og",
+        width: 1200,
+        height: 630,
+        alt: "Drawit - AI-powered diagrams, flowcharts & wireframes",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Drawit - AI-Powered Whiteboard",
+    description: "An AI powered tool to create diagrams, flowcharts and wireframes. Made in v0 by Webrenew.",
+    images: ["/og"],
+  },
   icons: {
     icon: [
       { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
