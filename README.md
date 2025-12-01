@@ -23,10 +23,12 @@ Chat with the AI assistant to create complex diagrams:
 - **Network Diagrams** - Infrastructure topology (tree, circular, grid layouts)
 - **Molecular Structures** - Chemical formulas (H2O, CO2, CH4, etc.)
 
-### Real-Time Collaboration
+### Real-Time Collaboration (Optional)
 - **Liveblocks Integration** - Real-time sync across multiple users
 - **Shared Canvas** - See changes instantly as others draw
 - **Cursor Presence** - View where other users are on the canvas
+
+> **Note:** Liveblocks is optional. The app works fully offline without it. Real-time collaboration features are only enabled when Liveblocks keys are configured.
 
 ### Customization
 - **Dark/Light Theme** - Toggle between themes
@@ -45,8 +47,8 @@ Chat with the AI assistant to create complex diagrams:
 - **Styling**: Tailwind CSS v4
 - **UI Components**: shadcn/ui
 - **AI**: Vercel AI SDK v5 with Claude/GPT models
-- **Real-time**: Liveblocks for collaboration
-- **Storage**: Vercel Blob for image uploads
+- **Real-time**: Liveblocks for collaboration (optional)
+- **Storage**: Vercel Blob for image uploads (optional)
 - **Drawing**: Custom SVG-based canvas with smart connectors
 
 ## Getting Started
@@ -58,15 +60,16 @@ Chat with the AI assistant to create complex diagrams:
 ### Environment Variables
 
 \`\`\`env
-# Liveblocks (for real-time collaboration)
-NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY=your_public_key
-LIVEBLOCKS_SECRET_KEY=your_secret_key
-
-# AI Gateway (for AI features)
+# AI Gateway (required for AI features)
 AI_GATEWAY_API_KEY=your_api_key
 
-# Vercel Blob (for image uploads)
+# Vercel Blob (optional - for image uploads)
 BLOB_READ_WRITE_TOKEN=your_blob_token
+
+# Liveblocks (optional - for real-time collaboration)
+# The app works fully without these keys - collaboration features are simply disabled
+NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY=your_public_key
+LIVEBLOCKS_SECRET_KEY=your_secret_key
 \`\`\`
 
 ### Installation
