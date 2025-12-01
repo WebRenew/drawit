@@ -1,0 +1,87 @@
+Update the chat history persistence system to fix issues with messages not saving properly:
+
+## 1. Fix chat-history API route (`app/api/chat-history/route.ts`)
+
+Add `addRandomSuffix: false` to the Vercel Blob `put()` call - without this, blob paths get random suffixes and `list()` can't find them:
+
+```typescript
+const blob = await put(
+  filename,
+  JSON.stringify({ messages, updatedAt: new Date().toISOString() }),
+  {
+    access: "public",
+    contentType: "application/json",
+    addRandomSuffix: false,  // CRITICAL - ensures consistent paths
+  },
+)
+```
+
+Add a `useLocalStorage` flag to API responses for when BLOB_READ_WRITE_TOKEN isn't configured, so the client can fall back to localStorage.
+
+## 2. Fix message serialization in AI chat panel
+
+The current serialization doesn't properly capture assistant message content. AI SDK v5 stores assistant text in `parts` array, not `content`. Update the serialization:
+
+```typescript
+const serializableParts = msg.parts?.filter((part) => {
+  return part.type === "text" || part.type === "file" || part.type === "reasoning"
+}).map((part) => {
+  if (part.type === "file") {
+    const filePart = part as any
+    return {
+      type: "file",
+      url: filePart.url,
+      filename: filePart.filename,
+      mimeType: filePart.mimeType,
+    }
+  }
+  return part
+})
+
+return {
+  id: msg.id,
+  role: msg.role,
+  content: anyMsg.content || "",
+  createdAt: anyMsg.createdAt instanceof Date ? anyMsg.createdAt.toISOString() : anyMsg.createdAt,
+  ...(serializableParts && serializableParts.length > 0 && { parts: serializableParts }),
+}
+```
+
+## 3. Add localStorage fallback
+
+Always save to localStorage as a backup, and use it when Blob isn't configured:
+
+```typescript
+const CHAT_HISTORY_LOCAL_KEY = "drawit-chat-history"
+
+// In the save effect:
+localStorage.setItem(CHAT_HISTORY_LOCAL_KEY, JSON.stringify({
+  messages: serializableMessages,
+  updatedAt: new Date().toISOString(),
+}))
+
+// In load effect - check useLocalStorage flag from API and fall back to localStorage
+```
+
+## 4. Remove Liveblocks (not needed for demo)
+
+Remove these from package.json:
+- `@liveblocks/client`
+- `@liveblocks/react`
+
+The `room-provider.tsx` should just be a passthrough:
+```typescript
+export function DrawingRoomProvider({ children }: { children: ReactNode }) {
+  return <>{children}</>
+}
+```
+
+## Environment Variables Required
+
+```env
+AI_GATEWAY_API_KEY=your_api_key
+BLOB_READ_WRITE_TOKEN=your_blob_token
+```
+
+No Liveblocks keys needed.
+
