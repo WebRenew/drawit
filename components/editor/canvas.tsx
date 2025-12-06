@@ -22,7 +22,7 @@ import type {
   HandlePosition,
 } from "@/lib/types"
 import { useCanvasStore, useHasHydrated } from "@/lib/store"
-import { SmartConnectorsLayer } from "./smart-connector"
+import { SmartConnectorLayer } from "./smart-connector-layer"
 import { autoHandlePositions } from "@/lib/connector-utils"
 // </CHANGE> Import ActionsMenu component
 import { ActionsMenu } from "./actions-menu"
@@ -1140,10 +1140,17 @@ export function Canvas({ previewElements }: { previewElements?: PreviewState | n
             const maxX = Math.max(...xs)
             const minY = Math.min(...ys)
             const maxY = Math.max(...ys)
+
+            // Normalize points relative to new top-left
+            const normalizedPoints = el.points.map((p) => [p[0] - minX, p[1] - minY] as [number, number])
+
             return {
               ...el,
+              x: el.x + minX,
+              y: el.y + minY,
               width: maxX - minX,
               height: maxY - minY,
+              points: normalizedPoints,
             }
           }
 
@@ -1576,7 +1583,7 @@ export function Canvas({ previewElements }: { previewElements?: PreviewState | n
               fill="currentColor"
               className="w-5 h-5"
             >
-              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
             </svg>
           </a>
           <ThemeToggle />
@@ -1636,6 +1643,15 @@ export function Canvas({ previewElements }: { previewElements?: PreviewState | n
             </svg>
           </div>
 
+          <SmartConnectorLayer
+            elements={elements}
+            connections={connections}
+            viewport={viewport}
+            selectedConnectionId={selectedConnectionId}
+            isDarkMode={resolvedTheme !== "dark"}
+            onConnectionSelect={handleConnectionClick}
+          />
+
           <div
             ref={canvasRef} // Assign ref to the canvas div
             className="absolute inset-0 touch-none"
@@ -1650,366 +1666,369 @@ export function Canvas({ previewElements }: { previewElements?: PreviewState | n
           >
             <svg className="w-full h-full overflow-visible pointer-events-none">
               {/* Removed background pattern from here */}
-              <SmartConnectorsLayer
-                elements={elements}
-                connections={connections}
-                selectedConnectionId={selectedConnectionId}
-                isDarkMode={resolvedTheme !== "dark"}
-                onConnectionClick={handleConnectionClick}
-              />
 
-              {connectorSource && connectorPreview && (
-                <line
-                  x1={(() => {
-                    const el = elements.find((e) => e.id === connectorSource.elementId)
-                    if (!el) return 0
-                    const cx = el.x + el.width / 2
-                    switch (connectorSource.handle) {
-                      case "left":
-                        return el.x
-                      case "right":
-                        return el.x + el.width
-                      default:
-                        return cx
-                    }
-                  })()}
-                  y1={(() => {
-                    const el = elements.find((e) => e.id === connectorSource.elementId)
-                    if (!el) return 0
-                    const cy = el.y + el.height / 2
-                    switch (connectorSource.handle) {
-                      case "top":
-                        return el.y
-                      case "bottom":
-                        return el.y + el.height
-                      default:
-                        return cy
-                    }
-                  })()}
-                  x2={connectorPreview.x}
-                  y2={connectorPreview.y}
-                  stroke={getSolidStrokeColor(appState.currentItemStrokeColor)}
-                  strokeWidth={2}
-                  strokeDasharray="6 4"
-                  opacity={0.6}
-                />
-              )}
 
-              {elements.map((el) => {
-                const isSelected = appState.selection.includes(el.id)
-                const strokeDasharray = getStrokeDashArray(el.strokeStyle, el.strokeWidth)
-                const isEditing = editingId === el.id
+              {
+                connectorSource && connectorPreview && (
+                  <line
+                    x1={(() => {
+                      const el = elements.find((e) => e.id === connectorSource.elementId)
+                      if (!el) return 0
+                      const cx = el.x + el.width / 2
+                      switch (connectorSource.handle) {
+                        case "left":
+                          return el.x
+                        case "right":
+                          return el.x + el.width
+                        default:
+                          return cx
+                      }
+                    })()}
+                    y1={(() => {
+                      const el = elements.find((e) => e.id === connectorSource.elementId)
+                      if (!el) return 0
+                      const cy = el.y + el.height / 2
+                      switch (connectorSource.handle) {
+                        case "top":
+                          return el.y
+                        case "bottom":
+                          return el.y + el.height
+                        default:
+                          return cy
+                      }
+                    })()}
+                    x2={connectorPreview.x}
+                    y2={connectorPreview.y}
+                    stroke={getSolidStrokeColor(appState.currentItemStrokeColor)}
+                    strokeWidth={2}
+                    strokeDasharray="6 4"
+                    opacity={0.6}
+                  />
+                )
+              }
 
-                // Gradient calculation for fill
-                const fillValue = isGradientStroke(el.strokeColor) ? `url(#${getGradientId(el.id)})` : el.backgroundColor
+              {
+                elements.map((el) => {
+                  const isSelected = appState.selection.includes(el.id)
+                  const strokeDasharray = getStrokeDashArray(el.strokeStyle, el.strokeWidth)
+                  const isEditing = editingId === el.id
 
-                // Solid stroke color for non-gradient strokes
-                const strokeColorValue = getSolidStrokeColor(el.strokeColor)
+                  // Gradient calculation for fill
+                  const fillValue = isGradientStroke(el.strokeColor) ? `url(#${getGradientId(el.id)})` : el.backgroundColor
 
-                return (
-                  <g key={el.id} className="pointer-events-auto" shapeRendering="geometricPrecision">
-                    {el.type === "rectangle" && (
-                      <g>
-                        <rect
-                          x={el.x}
-                          y={el.y}
-                          width={el.width}
-                          height={el.height}
-                          fill={fillValue}
-                          stroke={strokeColorValue}
-                          strokeWidth={el.strokeWidth}
-                          strokeDasharray={strokeDasharray}
-                          rx={4}
-                          ry={4}
-                          opacity={normalizeOpacity(el.opacity)}
-                        />
-                        {el.label && (
-                          <foreignObject
-                            x={el.x + (el.labelPadding ?? 8)}
-                            y={el.y + (el.labelPadding ?? 8)}
-                            width={el.width - (el.labelPadding ?? 8) * 2}
-                            height={el.height - (el.labelPadding ?? 8) * 2}
-                          >
-                            <div
-                              style={{
-                                width: "100%",
-                                height: "100%",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                color: el.labelColor || getSolidStrokeColor(el.strokeColor),
-                                fontSize: el.labelFontSize || 14,
-                                fontWeight: el.labelFontWeight || "normal",
-                                textAlign: "center",
-                                overflow: "hidden",
-                                wordBreak: "break-word",
-                                lineHeight: 1.2,
-                              }}
+                  // Solid stroke color for non-gradient strokes
+                  const strokeColorValue = getSolidStrokeColor(el.strokeColor)
+
+                  return (
+                    <g key={el.id} className="pointer-events-auto" shapeRendering="geometricPrecision">
+                      {el.type === "rectangle" && (
+                        <g>
+                          <rect
+                            x={el.x}
+                            y={el.y}
+                            width={el.width}
+                            height={el.height}
+                            fill={fillValue}
+                            stroke={strokeColorValue}
+                            strokeWidth={el.strokeWidth}
+                            strokeDasharray={strokeDasharray}
+                            rx={4}
+                            ry={4}
+                            opacity={normalizeOpacity(el.opacity)}
+                          />
+                          {el.label && (
+                            <foreignObject
+                              x={el.x + (el.labelPadding ?? 8)}
+                              y={el.y + (el.labelPadding ?? 8)}
+                              width={el.width - (el.labelPadding ?? 8) * 2}
+                              height={el.height - (el.labelPadding ?? 8) * 2}
                             >
-                              {el.label}
-                            </div>
-                          </foreignObject>
-                        )}
-                      </g>
-                    )}
+                              <div
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  color: el.labelColor || getSolidStrokeColor(el.strokeColor),
+                                  fontSize: el.labelFontSize || 14,
+                                  fontWeight: el.labelFontWeight || "normal",
+                                  textAlign: "center",
+                                  overflow: "hidden",
+                                  wordBreak: "break-word",
+                                  lineHeight: 1.2,
+                                }}
+                              >
+                                {el.label}
+                              </div>
+                            </foreignObject>
+                          )}
+                        </g>
+                      )}
 
-                    {el.type === "ellipse" && (
-                      <g>
-                        <ellipse
-                          cx={el.x + el.width / 2}
-                          cy={el.y + el.height / 2}
-                          rx={Math.abs(el.width || 0) / 2}
-                          ry={Math.abs(el.height || 0) / 2}
-                          fill={fillValue}
-                          stroke={strokeColorValue}
-                          strokeWidth={el.strokeWidth}
-                          strokeDasharray={strokeDasharray}
-                          opacity={normalizeOpacity(el.opacity)}
-                        />
-                        {el.label && (
-                          <foreignObject
-                            x={el.x + (el.labelPadding ?? 12)}
-                            y={el.y + (el.labelPadding ?? 12)}
-                            width={el.width - (el.labelPadding ?? 12) * 2}
-                            height={el.height - (el.labelPadding ?? 12) * 2}
-                          >
-                            <div
-                              style={{
-                                width: "100%",
-                                height: "100%",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                color: el.labelColor || getSolidStrokeColor(el.strokeColor),
-                                fontSize: el.labelFontSize || 14,
-                                fontWeight: el.labelFontWeight || "normal",
-                                textAlign: "center",
-                                overflow: "hidden",
-                                wordBreak: "break-word",
-                                lineHeight: 1.2,
-                              }}
+                      {el.type === "ellipse" && (
+                        <g>
+                          <ellipse
+                            cx={el.x + el.width / 2}
+                            cy={el.y + el.height / 2}
+                            rx={Math.abs(el.width || 0) / 2}
+                            ry={Math.abs(el.height || 0) / 2}
+                            fill={fillValue}
+                            stroke={strokeColorValue}
+                            strokeWidth={el.strokeWidth}
+                            strokeDasharray={strokeDasharray}
+                            opacity={normalizeOpacity(el.opacity)}
+                          />
+                          {el.label && (
+                            <foreignObject
+                              x={el.x + (el.labelPadding ?? 12)}
+                              y={el.y + (el.labelPadding ?? 12)}
+                              width={el.width - (el.labelPadding ?? 12) * 2}
+                              height={el.height - (el.labelPadding ?? 12) * 2}
                             >
-                              {el.label}
-                            </div>
-                          </foreignObject>
-                        )}
-                      </g>
-                    )}
+                              <div
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  color: el.labelColor || getSolidStrokeColor(el.strokeColor),
+                                  fontSize: el.labelFontSize || 14,
+                                  fontWeight: el.labelFontWeight || "normal",
+                                  textAlign: "center",
+                                  overflow: "hidden",
+                                  wordBreak: "break-word",
+                                  lineHeight: 1.2,
+                                }}
+                              >
+                                {el.label}
+                              </div>
+                            </foreignObject>
+                          )}
+                        </g>
+                      )}
 
-                    {el.type === "diamond" && (
-                      <g>
-                        <polygon
-                          points={`${el.x + el.width / 2},${el.y} ${el.x + el.width},${el.y + el.height / 2} ${el.x + el.width / 2},${el.y + el.height} ${el.x},${el.y + el.height / 2}`}
-                          fill={fillValue}
-                          stroke={strokeColorValue}
-                          strokeWidth={el.strokeWidth}
-                          strokeDasharray={strokeDasharray}
-                          opacity={normalizeOpacity(el.opacity)}
-                          strokeLinejoin="round"
-                        />
-                        {el.label && (
-                          <foreignObject
-                            x={el.x + el.width * 0.25}
-                            y={el.y + el.height * 0.25}
-                            width={el.width * 0.5}
-                            height={el.height * 0.5}
-                          >
-                            <div
-                              style={{
-                                width: "100%",
-                                height: "100%",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                color: el.labelColor || getSolidStrokeColor(el.strokeColor),
-                                fontSize: el.labelFontSize || 12,
-                                fontWeight: el.labelFontWeight || "normal",
-                                textAlign: "center",
-                                overflow: "hidden",
-                                wordBreak: "break-word",
-                                lineHeight: 1.1,
-                              }}
+                      {el.type === "diamond" && (
+                        <g>
+                          <polygon
+                            points={`${el.x + el.width / 2},${el.y} ${el.x + el.width},${el.y + el.height / 2} ${el.x + el.width / 2},${el.y + el.height} ${el.x},${el.y + el.height / 2}`}
+                            fill={fillValue}
+                            stroke={strokeColorValue}
+                            strokeWidth={el.strokeWidth}
+                            strokeDasharray={strokeDasharray}
+                            opacity={normalizeOpacity(el.opacity)}
+                            strokeLinejoin="round"
+                          />
+                          {el.label && (
+                            <foreignObject
+                              x={el.x + el.width * 0.25}
+                              y={el.y + el.height * 0.25}
+                              width={el.width * 0.5}
+                              height={el.height * 0.5}
                             >
-                              {el.label}
-                            </div>
-                          </foreignObject>
-                        )}
-                      </g>
-                    )}
+                              <div
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  color: el.labelColor || getSolidStrokeColor(el.strokeColor),
+                                  fontSize: el.labelFontSize || 12,
+                                  fontWeight: el.labelFontWeight || "normal",
+                                  textAlign: "center",
+                                  overflow: "hidden",
+                                  wordBreak: "break-word",
+                                  lineHeight: 1.1,
+                                }}
+                              >
+                                {el.label}
+                              </div>
+                            </foreignObject>
+                          )}
+                        </g>
+                      )}
 
-                    {el.type === "arrow" && el.points && el.points.length > 0 && (
-                      <g>
+                      {el.type === "arrow" && el.points && el.points.length > 0 && (
+                        <g>
+                          <line
+                            x1={el.x + el.points[0][0]}
+                            y1={el.y + el.points[0][1]}
+                            x2={el.x + el.points[el.points.length - 1][0]}
+                            y2={el.y + el.points[el.points.length - 1][1]}
+                            stroke={strokeColorValue}
+                            strokeWidth={el.strokeWidth || 2}
+                            strokeDasharray={strokeDasharray}
+                            opacity={normalizeOpacity(el.opacity)}
+                            strokeLinecap="round"
+                          />
+                          {renderArrowHead(
+                            el.x + el.points[el.points.length - 1][0],
+                            el.y + el.points[el.points.length - 1][1],
+                            el.angle,
+                            el.arrowHeadEnd,
+                            strokeColorValue,
+                            el.strokeWidth,
+                          )}
+                          {renderArrowHead(
+                            el.x + el.points[0][0],
+                            el.y + el.points[0][1],
+                            el.angle,
+                            el.arrowHeadStart,
+                            strokeColorValue,
+                            el.strokeWidth,
+                          )}
+                        </g>
+                      )}
+
+                      {el.type === "line" && el.points && el.points.length > 0 && (
                         <line
                           x1={el.x + el.points[0][0]}
                           y1={el.y + el.points[0][1]}
                           x2={el.x + el.points[el.points.length - 1][0]}
                           y2={el.y + el.points[el.points.length - 1][1]}
-                          stroke={strokeColorValue}
+                          stroke={strokeColorValue || (resolvedTheme === "dark" ? "#ffffff" : "#000000")}
                           strokeWidth={el.strokeWidth || 2}
                           strokeDasharray={strokeDasharray}
                           opacity={normalizeOpacity(el.opacity)}
                           strokeLinecap="round"
                         />
-                        {renderArrowHead(
-                          el.x + el.points[el.points.length - 1][0],
-                          el.y + el.points[el.points.length - 1][1],
-                          el.angle,
-                          el.arrowHeadEnd,
-                          strokeColorValue,
-                          el.strokeWidth,
-                        )}
-                        {renderArrowHead(
-                          el.x + el.points[0][0],
-                          el.y + el.points[0][1],
-                          el.angle,
-                          el.arrowHeadStart,
-                          strokeColorValue,
-                          el.strokeWidth,
-                        )}
-                      </g>
-                    )}
+                      )}
 
-                    {el.type === "line" && el.points && el.points.length > 0 && (
-                      <line
-                        x1={el.x + el.points[0][0]}
-                        y1={el.y + el.points[0][1]}
-                        x2={el.x + el.points[el.points.length - 1][0]}
-                        y2={el.y + el.points[el.points.length - 1][1]}
-                        stroke={strokeColorValue || (resolvedTheme === "dark" ? "#ffffff" : "#000000")}
-                        strokeWidth={el.strokeWidth || 2}
-                        strokeDasharray={strokeDasharray}
-                        opacity={normalizeOpacity(el.opacity)}
-                        strokeLinecap="round"
-                      />
-                    )}
+                      {el.type === "freedraw" && el.points && el.points.length > 0 && (
+                        <g transform={`translate(${el.x}, ${el.y})`}>
+                          <polyline
+                            points={el.points.map((p) => `${p[0]},${p[1]}`).join(" ")}
+                            fill="none"
+                            stroke={strokeColorValue}
+                            strokeWidth={el.strokeWidth || 2}
+                            strokeDasharray={strokeDasharray}
+                            opacity={normalizeOpacity(el.opacity)}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </g>
+                      )}
 
-                    {el.type === "freedraw" && el.points && el.points.length > 0 && (
-                      <polyline
-                        points={el.points.map((p) => `${p[0]},${p[1]}`).join(" ")}
-                        fill="none"
-                        stroke={strokeColorValue}
-                        strokeWidth={el.strokeWidth || 2}
-                        strokeDasharray={strokeDasharray}
-                        opacity={normalizeOpacity(el.opacity)}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    )}
-
-                    {el.type === "text" && !isEditing && (
-                      <foreignObject
-                        x={el.x}
-                        y={el.y}
-                        width={el.width || 200}
-                        height={el.height || 40}
-                        style={{ overflow: "visible" }}
-                      >
-                        <div
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent:
-                              el.textAlign === "center"
-                                ? "center"
-                                : el.textAlign === "right"
-                                  ? "flex-end"
-                                  : "flex-start",
-                            color: getSolidStrokeColor(el.strokeColor),
-                            fontSize: el.fontSize || 20,
-                            fontWeight: el.fontWeight || "normal",
-                            fontFamily: el.fontFamily || "sans-serif",
-                            opacity: normalizeOpacity(el.opacity),
-                            whiteSpace: "pre-wrap",
-                            wordBreak: "break-word",
-                            padding: "4px 8px",
-                            boxSizing: "border-box",
-                          }}
+                      {el.type === "text" && !isEditing && (
+                        <foreignObject
+                          x={el.x}
+                          y={el.y}
+                          width={el.width || 200}
+                          height={el.height || 40}
+                          style={{ overflow: "visible" }}
                         >
-                          {el.text || "Double-click to edit"}
-                        </div>
-                      </foreignObject>
-                    )}
+                          <div
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent:
+                                el.textAlign === "center"
+                                  ? "center"
+                                  : el.textAlign === "right"
+                                    ? "flex-end"
+                                    : "flex-start",
+                              color: getSolidStrokeColor(el.strokeColor),
+                              fontSize: el.fontSize || 20,
+                              fontWeight: el.fontWeight || "normal",
+                              fontFamily: el.fontFamily || "sans-serif",
+                              opacity: normalizeOpacity(el.opacity),
+                              whiteSpace: "pre-wrap",
+                              wordBreak: "break-word",
+                              padding: "4px 8px",
+                              boxSizing: "border-box",
+                            }}
+                          >
+                            {el.text || "Double-click to edit"}
+                          </div>
+                        </foreignObject>
+                      )}
 
-                    {el.type === "text" && isEditing && (
-                      <foreignObject
-                        x={el.x}
-                        y={el.y}
-                        width={Math.max(el.width || 200, 200)}
-                        height={Math.max(el.height || 40, 40)}
-                        style={{ overflow: "visible" }}
-                      >
-                        <textarea
-                          ref={textAreaRef}
-                          value={el.text}
-                          onChange={(e) => handleTextChange(el.id, e.target.value)}
-                          onBlur={handleBlur}
-                          onKeyDown={(e) => {
-                            if (e.key === "Escape") {
-                              handleBlur()
-                            }
-                            e.stopPropagation()
-                          }}
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            minWidth: "200px",
-                            minHeight: "40px",
-                            background: "transparent",
-                            border: "1px solid hsl(var(--primary))",
-                            borderRadius: "4px",
-                            outline: "none",
-                            resize: "both",
-                            color: getSolidStrokeColor(el.strokeColor),
-                            fontSize: el.fontSize || 20,
-                            fontWeight: el.fontWeight || "normal",
-                            fontFamily: el.fontFamily || "sans-serif",
-                            textAlign: el.textAlign || "left",
-                            padding: "4px 8px",
-                            boxSizing: "border-box",
-                          }}
-                          autoFocus
+                      {el.type === "text" && isEditing && (
+                        <foreignObject
+                          x={el.x}
+                          y={el.y}
+                          width={Math.max(el.width || 200, 200)}
+                          height={Math.max(el.height || 40, 40)}
+                          style={{ overflow: "visible" }}
+                        >
+                          <textarea
+                            ref={textAreaRef}
+                            value={el.text}
+                            onChange={(e) => handleTextChange(el.id, e.target.value)}
+                            onBlur={handleBlur}
+                            onKeyDown={(e) => {
+                              if (e.key === "Escape") {
+                                handleBlur()
+                              }
+                              e.stopPropagation()
+                            }}
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              minWidth: "200px",
+                              minHeight: "40px",
+                              background: "transparent",
+                              border: "1px solid hsl(var(--primary))",
+                              borderRadius: "4px",
+                              outline: "none",
+                              resize: "both",
+                              color: getSolidStrokeColor(el.strokeColor),
+                              fontSize: el.fontSize || 20,
+                              fontWeight: el.fontWeight || "normal",
+                              fontFamily: el.fontFamily || "sans-serif",
+                              textAlign: el.textAlign || "left",
+                              padding: "4px 8px",
+                              boxSizing: "border-box",
+                            }}
+                            autoFocus
+                          />
+                        </foreignObject>
+                      )}
+
+                      {el.type === "image" && el.imageUrl && (
+                        <image
+                          href={el.imageUrl}
+                          x={el.x}
+                          y={el.y}
+                          width={el.width}
+                          height={el.height}
+                          preserveAspectRatio="xMidYMid meet"
+                          opacity={normalizeOpacity(el.opacity)}
                         />
-                      </foreignObject>
-                    )}
+                      )}
 
-                    {el.type === "image" && el.imageUrl && (
-                      <image
-                        href={el.imageUrl}
-                        x={el.x}
-                        y={el.y}
-                        width={el.width}
-                        height={el.height}
-                        preserveAspectRatio="xMidYMid meet"
-                        opacity={normalizeOpacity(el.opacity)}
-                      />
-                    )}
-
-                    {isSelected && renderResizeHandles(el)}
-                  </g>
-                )
-              })}
+                      {isSelected && renderResizeHandles(el)}
+                    </g>
+                  )
+                })
+              }
 
               {/* Gradient definitions */}
-              {elements.map((el) => {
-                if (isGradientStroke(el.strokeColor)) {
-                  const gradient = el.strokeColor
-                  const gradientId = getGradientId(el.id)
-                  const coords = getGradientCoords(gradient.angle)
-                  return (
-                    <defs key={gradientId}>
-                      <linearGradient id={gradientId} x1={coords.x1} y1={coords.y1} x2={coords.x2} y2={coords.y2}>
-                        <stop offset="0%" stopColor={gradient.colors[0]} />
-                        <stop offset="100%" stopColor={gradient.colors[1]} />
-                      </linearGradient>
-                    </defs>
-                  )
-                }
-                return null
-              })}
+              {
+                elements.map((el) => {
+                  if (isGradientStroke(el.strokeColor)) {
+                    const gradient = el.strokeColor
+                    const gradientId = getGradientId(el.id)
+                    const coords = getGradientCoords(gradient.angle)
+                    return (
+                      <defs key={gradientId}>
+                        <linearGradient id={gradientId} x1={coords.x1} y1={coords.y1} x2={coords.x2} y2={coords.y2}>
+                          <stop offset="0%" stopColor={gradient.colors[0]} />
+                          <stop offset="100%" stopColor={gradient.colors[1]} />
+                        </linearGradient>
+                      </defs>
+                    )
+                  }
+                  return null
+                })
+              }
 
-              {previewElements &&
+              {
+                previewElements &&
                 previewElements.elements.map((el) => {
                   const strokeDasharray = getStrokeDashArray(el.strokeStyle, el.strokeWidth)
 
@@ -2197,14 +2216,16 @@ export function Canvas({ previewElements }: { previewElements?: PreviewState | n
                       )}
 
                       {el.type === "freedraw" && el.points && el.points.length > 0 && (
-                        <polyline
-                          points={el.points.map((p) => `${p[0]},${p[1]}`).join(" ")}
-                          fill="none"
-                          stroke={strokeColorValue}
-                          strokeWidth={el.strokeWidth}
-                          strokeDasharray="4 4"
-                          opacity={normalizeOpacity(el.opacity) * 0.7}
-                        />
+                        <g transform={`translate(${el.x}, ${el.y})`}>
+                          <polyline
+                            points={el.points.map((p) => `${p[0]},${p[1]}`).join(" ")}
+                            fill="none"
+                            stroke={strokeColorValue}
+                            strokeWidth={el.strokeWidth}
+                            strokeDasharray="4 4"
+                            opacity={normalizeOpacity(el.opacity) * 0.7}
+                          />
+                        </g>
                       )}
 
                       {el.type === "text" && (
@@ -2235,7 +2256,8 @@ export function Canvas({ previewElements }: { previewElements?: PreviewState | n
                       )}
                     </g>
                   )
-                })}
+                })
+              }
             </svg>
           </div>
         </div>

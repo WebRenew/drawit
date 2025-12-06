@@ -256,16 +256,16 @@ export const SmartConnectorLayer = forwardRef<SmartConnectorLayerHandle, SmartCo
           markerEnd:
             conn.arrowHeadEnd !== "none"
               ? {
-                  type: MarkerType.ArrowClosed,
-                  color: conn.strokeColor ? getSolidStrokeColor(conn.strokeColor) : (isDarkMode ? "#ffffff" : "#6366f1"),
-                }
+                type: MarkerType.ArrowClosed,
+                color: conn.strokeColor ? getSolidStrokeColor(conn.strokeColor) : (isDarkMode ? "#ffffff" : "#6366f1"),
+              }
               : undefined,
           markerStart:
             conn.arrowHeadStart && conn.arrowHeadStart !== "none"
               ? {
-                  type: MarkerType.ArrowClosed,
-                  color: conn.strokeColor ? getSolidStrokeColor(conn.strokeColor) : (isDarkMode ? "#ffffff" : "#6366f1"),
-                }
+                type: MarkerType.ArrowClosed,
+                color: conn.strokeColor ? getSolidStrokeColor(conn.strokeColor) : (isDarkMode ? "#ffffff" : "#6366f1"),
+              }
               : undefined,
           data: {
             pathType: conn.pathType || "smoothstep",
@@ -307,7 +307,7 @@ export const SmartConnectorLayer = forwardRef<SmartConnectorLayerHandle, SmartCo
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
+          transform: `translate(${viewport.x * viewport.zoom}px, ${viewport.y * viewport.zoom}px) scale(${viewport.zoom})`,
           transformOrigin: "0 0",
         }}
       >
