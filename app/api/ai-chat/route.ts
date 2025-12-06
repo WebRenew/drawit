@@ -66,7 +66,7 @@ export async function POST(req: Request) {
       theme?: string
     }
 
-    const selectedModel = req.headers.get("x-selected-model") || "anthropic/claude-sonnet-4"
+    const selectedModel = req.headers.get("x-selected-model") || "anthropic/claude-3-5-sonnet-latest"
 
     // Default canvas info if not provided
     const canvas = canvasInfo || { centerX: 400, centerY: 300, width: 800, height: 600 }
