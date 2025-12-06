@@ -7,7 +7,7 @@ import { PropertiesPanel } from "./properties-panel"
 import { ThemeToggle } from "@/components/theme-toggle"
 // import { AIChatPanel } from "@/components/ai-chat-panel" // Removed this import
 import { useTheme } from "@/components/theme-provider"
-import { normalizeOpacity, getGradientCoords, getSolidStrokeColor } from "@/lib/canvas-helpers"
+import { normalizeOpacity, getGradientCoords, getSolidStrokeColor, compressImage } from "@/lib/canvas-helpers"
 import { isGradientStroke, getGradientId } from "@/lib/types"
 import { ImageUploadDialog } from "./image-upload-dialog"
 import type {
@@ -29,6 +29,7 @@ import { ActionsMenu } from "./actions-menu"
 // Import BrandIcon component
 import { BrandIcon } from "@/components/brand-icon"
 
+import { toast } from "sonner"
 // Helper for ID generation
 const generateId = () => Math.random().toString(36).substr(2, 9)
 
@@ -58,44 +59,6 @@ const sanitizeElement = (element: CanvasElement): CanvasElement => {
   return sanitized
 }
 
-const compressImage = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.readAsDataURL(file)
-    reader.onload = (event) => {
-      const img = new Image()
-      img.crossOrigin = "anonymous"
-      img.src = event.target?.result as string
-      img.onload = () => {
-        const canvas = document.createElement("canvas")
-        const MAX_WIDTH = 800
-        const MAX_HEIGHT = 800
-        let width = img.width
-        let height = img.height
-
-        if (width > height) {
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width
-            width = MAX_WIDTH
-          }
-        } else {
-          if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height
-            height = MAX_HEIGHT
-          }
-        }
-
-        canvas.width = width
-        canvas.height = height
-        const ctx = canvas.getContext("2d")
-        ctx?.drawImage(img, 0, 0, width, height)
-        resolve(canvas.toDataURL("image/jpeg", 0.7)) // Compress to JPEG with 0.7 quality
-      }
-      img.onerror = (error) => reject(error)
-    }
-    reader.onerror = (error) => reject(error)
-  })
-}
 
 const INITIAL_VIEWPORT: Viewport = { x: 0, y: 0, zoom: 1 }
 
@@ -486,8 +449,10 @@ export function Canvas({ previewElements }: { previewElements?: PreviewState | n
               newElement.imageUrl = imageUrl
               addElement(newElement)
               setAppState((prev) => ({ ...prev, tool: "selection", selection: [id] }))
+              toast.success("Image pasted successfully")
             } catch (error) {
               console.error("Error processing pasted image:", error)
+              toast.error("Failed to paste image")
             }
           }
         }
@@ -1482,8 +1447,10 @@ export function Canvas({ previewElements }: { previewElements?: PreviewState | n
             newElement.imageUrl = imageUrl
             addElement(newElement)
             setAppState((prev) => ({ ...prev, tool: "selection", selection: [id] }))
+            toast.success("Image pasted successfully")
           } catch (error) {
             console.error("Error processing pasted image:", error)
+            toast.error("Failed to paste image")
           }
         }
       }
@@ -1508,8 +1475,10 @@ export function Canvas({ previewElements }: { previewElements?: PreviewState | n
         newElement.imageUrl = imageUrl
         addElement(newElement)
         setAppState((prev) => ({ ...prev, tool: "selection", selection: [id] }))
+        toast.success("Image dropped successfully")
       } catch (error) {
         console.error("Error processing dropped image:", error)
+        toast.error("Failed to process dropped image")
       }
     }
   }
@@ -1528,8 +1497,10 @@ export function Canvas({ previewElements }: { previewElements?: PreviewState | n
       addElement(newElement)
       setAppState((prev) => ({ ...prev, tool: "selection", selection: [id] }))
       setShowImageDialog(false)
+      toast.success("Image added successfully")
     } catch (error) {
       console.error("Error adding image:", error)
+      toast.error("Failed to add image")
       setShowImageDialog(false) // Ensure dialog closes even on error
     }
   }

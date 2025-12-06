@@ -4,6 +4,7 @@ import type React from "react"
 
 import { useState, useRef } from "react"
 import { X, Upload, LinkIcon } from "lucide-react"
+import { compressImage } from "@/lib/canvas-helpers"
 
 interface ImageUploadDialogProps {
   onImageSelect?: (imageUrl: string) => void
@@ -23,44 +24,6 @@ export function ImageUploadDialog({ onImageSelect, onSelect, onClose, position }
   const [activeTab, setActiveTab] = useState<"upload" | "url">("upload")
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const compressImage = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.readAsDataURL(file)
-      reader.onload = (event) => {
-        const img = new Image()
-        img.crossOrigin = "anonymous"
-        img.src = event.target?.result as string
-        img.onload = () => {
-          const canvas = document.createElement("canvas")
-          const MAX_WIDTH = 800
-          const MAX_HEIGHT = 800
-          let width = img.width
-          let height = img.height
-
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width
-              width = MAX_WIDTH
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width *= MAX_HEIGHT / height
-              height = MAX_HEIGHT
-            }
-          }
-
-          canvas.width = width
-          canvas.height = height
-          const ctx = canvas.getContext("2d")
-          ctx?.drawImage(img, 0, 0, width, height)
-          resolve(canvas.toDataURL("image/jpeg", 0.7))
-        }
-        img.onerror = (error) => reject(error)
-      }
-      reader.onerror = (error) => reject(error)
-    })
-  }
 
   const handleFile = async (file: File) => {
     if (!file.type.startsWith("image/")) return
@@ -115,21 +78,19 @@ export function ImageUploadDialog({ onImageSelect, onSelect, onClose, position }
         <div className="flex gap-2 mb-4 border-b border-border">
           <button
             onClick={() => setActiveTab("upload")}
-            className={`px-4 py-2 transition-colors ${
-              activeTab === "upload"
-                ? "border-b-2 border-primary text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+            className={`px-4 py-2 transition-colors ${activeTab === "upload"
+              ? "border-b-2 border-primary text-primary"
+              : "text-muted-foreground hover:text-foreground"
+              }`}
           >
             Upload
           </button>
           <button
             onClick={() => setActiveTab("url")}
-            className={`px-4 py-2 transition-colors ${
-              activeTab === "url"
-                ? "border-b-2 border-primary text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+            className={`px-4 py-2 transition-colors ${activeTab === "url"
+              ? "border-b-2 border-primary text-primary"
+              : "text-muted-foreground hover:text-foreground"
+              }`}
           >
             URL
           </button>
@@ -138,9 +99,8 @@ export function ImageUploadDialog({ onImageSelect, onSelect, onClose, position }
         {activeTab === "upload" ? (
           <div>
             <div
-              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                isDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
-              }`}
+              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${isDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+                }`}
               onDragOver={(e) => {
                 e.preventDefault()
                 setIsDragging(true)
