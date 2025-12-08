@@ -1,377 +1,971 @@
-# AI SDK v6 Migration & Tool Refactoring Plan
+# AI SDK v6 Migration & Backend Refactoring Plan
 
 ## Executive Summary
 
-This document outlines a comprehensive plan to migrate Drawit from AI SDK v5 to AI SDK v6 (beta), fundamentally restructuring the agent/tool architecture for improved maintainability, UX, and server-side execution capabilities.
+This document outlines a comprehensive plan to:
+1. Migrate Drawit from AI SDK v5 to AI SDK v6 (beta)
+2. **Replace Vercel Blob + localStorage with Supabase**
+3. **Add Google Authentication for user accounts**
+4. Restructure the agent/tool architecture for improved maintainability and UX
 
 ---
 
 ## Current Architecture Analysis
 
-### Pain Points (v5)
+### Pain Points
 
-1. **Client-Side Tool Execution**: Tools are defined server-side but executed client-side via `onToolCall` callback
-2. **Tight Coupling**: Tool definitions in route.ts are disconnected from handlers in `/lib/ai-chat/tool-handlers/`
-3. **Schema Duplication**: Zod schemas defined separately from handler logic
-4. **No Server-Side Execution**: Cannot perform database operations, API calls, or file operations during tool execution
-5. **Complex State Passing**: Must pass canvas state, theme, and refs through context objects
-6. **No Multi-Step Reasoning**: Agent can only execute one tool per response cycle
+#### AI SDK (v5)
+1. **Client-Side Tool Execution**: Tools defined server-side but executed client-side
+2. **Tight Coupling**: Tool definitions disconnected from handlers
+3. **No Multi-Step Reasoning**: Agent can only execute one tool per response cycle
 
-### Current Flow
+#### Storage (Vercel Blob + localStorage)
+1. **No User Accounts**: Chat history tied to browser session, not user
+2. **Data Loss Risk**: localStorage cleared on browser reset
+3. **No Cross-Device Sync**: Users can't access diagrams from different devices
+4. **Limited Querying**: Vercel Blob is key-value only, no relational queries
+5. **Cost**: Blob storage costs scale poorly vs. database
+
+### Current Data Flow
 ```
-User → Chat Panel → API Route (streamText) → Model → Tool Call
-                                                          ↓
-                                              Client-Side onToolCall
-                                                          ↓
-                                              Handler Execution
-                                                          ↓
-                                              Canvas Mutation
-```
-
----
-
-## AI SDK v6 Key Changes
-
-### 1. Server-Side Tool Execution
-Tools can now include an `execute` function that runs server-side:
-
-```typescript
-const weatherTool = tool({
-  description: 'Get weather for a location',
-  inputSchema: z.object({ location: z.string() }),
-  execute: async ({ location }) => {
-    // Runs on server - can call APIs, databases, etc.
-    return { temperature: 72, condition: 'sunny' };
-  },
-});
-```
-
-### 2. Multi-Step Reasoning
-New `stopWhen` parameter enables agentic loops:
-
-```typescript
-const result = await generateText({
-  model: gateway('anthropic/claude-opus-4.5'),
-  prompt: userMessage,
-  stopWhen: stepCountIs(5), // Allow up to 5 reasoning steps
-  tools: { ... },
-});
-```
-
-### 3. Independent Tool Definitions
-Tools can be defined in separate modules and composed:
-
-```typescript
-// tools/diagram-tools.ts
-export const diagramTools = {
-  createFlowchart: tool({ ... }),
-  createOrgChart: tool({ ... }),
-};
-
-// route.ts
-import { diagramTools } from '@/tools/diagram-tools';
-const result = streamText({ tools: { ...diagramTools, ...shapeTools } });
+User → localStorage (session) → Vercel Blob (backup)
+           ↓
+    No authentication
+    No user identity
+    No diagram persistence
 ```
 
 ---
 
-## Migration Plan
+## Target Architecture
 
-### Phase 1: Tool Architecture Refactor (Week 1)
-
-#### 1.1 Create New Tool Structure
+### New Data Flow
 ```
-lib/
-├── tools/                          # NEW: Centralized tool definitions
-│   ├── index.ts                    # Tool registry & exports
-│   ├── canvas-tools.ts             # Canvas state & manipulation
-│   ├── diagram-tools.ts            # Diagram generators
-│   ├── shape-tools.ts              # Shape CRUD operations
-│   └── style-tools.ts              # Style modification tools
-├── ai-chat/
-│   ├── tool-handlers/              # DEPRECATED: Move to tools/
-│   └── types.ts                    # Shared types
+User → Google OAuth → Supabase Auth → User Session
+                                           ↓
+                                    Supabase Database
+                                    ├── users
+                                    ├── diagrams
+                                    ├── chat_sessions
+                                    └── chat_messages
 ```
 
-#### 1.2 Unified Tool Definition Pattern
-Each tool file exports a `tool()` with co-located schema and execute:
+### Tech Stack Changes
+
+| Component | Current | Target |
+|-----------|---------|--------|
+| Auth | None | Supabase Auth (Google OAuth) |
+| Chat History | Vercel Blob + localStorage | Supabase `chat_messages` |
+| Diagram Storage | localStorage only | Supabase `diagrams` |
+| User Data | None | Supabase `users` |
+| AI SDK | v5 | v6 (beta) |
+
+---
+
+## Phase 0: Supabase Setup (Week 0)
+
+### 0.1 Create Supabase Project
+1. Create project at [supabase.com](https://supabase.com)
+2. Note down:
+   - Project URL: `https://xxxx.supabase.co`
+   - Anon Key: `eyJ...`
+   - Service Role Key: `eyJ...` (for server-side)
+
+### 0.2 Configure Google OAuth
+1. Go to Supabase Dashboard → Authentication → Providers
+2. Enable Google provider
+3. Create Google Cloud OAuth credentials:
+   - Authorized redirect URI: `https://xxxx.supabase.co/auth/v1/callback`
+4. Add Client ID and Secret to Supabase
+
+### 0.3 Database Schema
+
+```sql
+-- migrations/001_initial_schema.sql
+
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Users table (extends Supabase auth.users)
+CREATE TABLE public.profiles (
+  id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+  email TEXT,
+  full_name TEXT,
+  avatar_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Diagrams table
+CREATE TABLE public.diagrams (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  title TEXT NOT NULL DEFAULT 'Untitled Diagram',
+  elements JSONB NOT NULL DEFAULT '[]',
+  connections JSONB NOT NULL DEFAULT '[]',
+  viewport JSONB DEFAULT '{"x": 0, "y": 0, "zoom": 1}',
+  theme TEXT DEFAULT 'dark',
+  is_public BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Chat sessions table
+CREATE TABLE public.chat_sessions (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  diagram_id UUID REFERENCES public.diagrams(id) ON DELETE SET NULL,
+  title TEXT,
+  model TEXT DEFAULT 'anthropic/claude-opus-4.5',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Chat messages table
+CREATE TABLE public.chat_messages (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  session_id UUID REFERENCES public.chat_sessions(id) ON DELETE CASCADE NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system', 'tool')),
+  content TEXT,
+  parts JSONB, -- For AI SDK v5/v6 message parts
+  tool_calls JSONB,
+  tool_results JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes
+CREATE INDEX idx_diagrams_user_id ON public.diagrams(user_id);
+CREATE INDEX idx_chat_sessions_user_id ON public.chat_sessions(user_id);
+CREATE INDEX idx_chat_messages_session_id ON public.chat_messages(session_id);
+CREATE INDEX idx_diagrams_updated_at ON public.diagrams(updated_at DESC);
+
+-- Row Level Security (RLS)
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.diagrams ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chat_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
+
+-- Policies: Users can only access their own data
+CREATE POLICY "Users can view own profile" ON public.profiles
+  FOR SELECT USING (auth.uid() = id);
+
+CREATE POLICY "Users can update own profile" ON public.profiles
+  FOR UPDATE USING (auth.uid() = id);
+
+CREATE POLICY "Users can view own diagrams" ON public.diagrams
+  FOR SELECT USING (auth.uid() = user_id OR is_public = TRUE);
+
+CREATE POLICY "Users can insert own diagrams" ON public.diagrams
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own diagrams" ON public.diagrams
+  FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own diagrams" ON public.diagrams
+  FOR DELETE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can view own chat sessions" ON public.chat_sessions
+  FOR ALL USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can view own chat messages" ON public.chat_messages
+  FOR ALL USING (
+    session_id IN (
+      SELECT id FROM public.chat_sessions WHERE user_id = auth.uid()
+    )
+  );
+
+-- Function to auto-create profile on signup
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, full_name, avatar_url)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    NEW.raw_user_meta_data->>'full_name',
+    NEW.raw_user_meta_data->>'avatar_url'
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger for new user
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+```
+
+### 0.4 Environment Variables
+
+```bash
+# .env.local
+NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+
+# Remove these:
+# BLOB_READ_WRITE_TOKEN (deprecated)
+```
+
+---
+
+## Phase 1: Authentication & User System (Week 1)
+
+### 1.1 Install Dependencies
+
+```bash
+pnpm add @supabase/supabase-js @supabase/ssr
+pnpm remove @vercel/blob  # Remove Vercel Blob
+```
+
+### 1.2 Supabase Client Setup
 
 ```typescript
-// lib/tools/diagram-tools.ts
-import { tool } from 'ai';
-import { z } from 'zod';
-import { CanvasService } from '@/lib/services/canvas-service';
+// lib/supabase/client.ts
+import { createBrowserClient } from '@supabase/ssr';
 
-export const createFlowchartTool = tool({
-  description: 'Create a flowchart with connected nodes.',
-  inputSchema: z.object({
-    steps: z.array(z.object({
-      id: z.string(),
-      type: z.enum(['start', 'end', 'process', 'decision']),
-      label: z.string(),
-      strokeColor: z.string().optional(),
-      backgroundColor: z.string().optional(),
-    })),
-    connections: z.array(z.object({
-      from: z.string(),
-      to: z.string(),
-      label: z.string().optional(),
-    })),
-    direction: z.enum(['vertical', 'horizontal']).optional(),
-  }),
-  // Server-side execution (v6)
-  execute: async (args, { canvasService }) => {
-    const result = await canvasService.createFlowchart(args);
-    return JSON.stringify(result);
-  },
-});
-
-export const diagramTools = {
-  createFlowchart: createFlowchartTool,
-  createOrgChart: createOrgChartTool,
-  createERDiagram: createERDiagramTool,
-  createNetworkDiagram: createNetworkDiagramTool,
-  createMindMap: createMindMapTool,
-  createMolecule: createMoleculeTool,
-};
-```
-
-#### 1.3 Canvas Service Layer
-Create a service class to encapsulate canvas operations:
-
-```typescript
-// lib/services/canvas-service.ts
-export class CanvasService {
-  private elements: CanvasElement[] = [];
-  private connections: SmartConnection[] = [];
-  private theme: string;
-  
-  constructor(initialState: { elements: CanvasElement[], connections: SmartConnection[], theme: string }) {
-    this.elements = initialState.elements;
-    this.connections = initialState.connections;
-    this.theme = initialState.theme;
-  }
-  
-  createFlowchart(args: CreateFlowchartInput): FlowchartResult {
-    // Layout calculation
-    // Element creation
-    // Connection creation
-    return { elements: newElements, connections: newConnections };
-  }
-  
-  getChanges(): { elements: CanvasElement[], connections: SmartConnection[] } {
-    return { elements: this.elements, connections: this.connections };
-  }
+export function createClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 }
 ```
 
----
-
-### Phase 2: API Route Restructure (Week 2)
-
-#### 2.1 New Route Architecture
 ```typescript
-// app/api/ai-chat/route.ts
-import { generateText, streamText, stepCountIs } from 'ai';
-import { gateway } from '@ai-sdk/gateway';
-import { diagramTools } from '@/lib/tools/diagram-tools';
-import { shapeTools } from '@/lib/tools/shape-tools';
-import { canvasTools } from '@/lib/tools/canvas-tools';
-import { CanvasService } from '@/lib/services/canvas-service';
+// lib/supabase/server.ts
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 
-export const maxDuration = 60;
+export async function createServerSupabaseClient() {
+  const cookieStore = await cookies();
 
-export async function POST(req: Request) {
-  const { messages, canvasState, theme } = await req.json();
-  
-  // Initialize canvas service with current state
-  const canvasService = new CanvasService({
-    elements: canvasState.elements,
-    connections: canvasState.connections,
-    theme,
-  });
-  
-  const result = await streamText({
-    model: gateway('anthropic/claude-opus-4.5'),
-    system: getSystemPrompt(theme, canvasState),
-    messages,
-    stopWhen: stepCountIs(5), // Enable multi-step reasoning
-    tools: {
-      ...diagramTools,
-      ...shapeTools,
-      ...canvasTools,
-    },
-    // Pass service to tool execution context
-    toolContext: { canvasService },
-  });
-  
-  // Return stream with canvas changes
-  return result.toUIMessageStreamResponse({
-    // Include canvas changes in response metadata
-    sendDataStreamPart: (part) => {
-      if (part.type === 'finish') {
-        return { canvasChanges: canvasService.getChanges() };
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          );
+        },
+      },
+    }
+  );
+}
+```
+
+### 1.3 Auth Provider Component
+
+```typescript
+// components/auth-provider.tsx
+'use client';
+
+import { createContext, useContext, useEffect, useState } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import type { User, Session } from '@supabase/supabase-js';
+
+interface AuthContextType {
+  user: User | null;
+  session: Session | null;
+  isLoading: boolean;
+  signInWithGoogle: () => Promise<void>;
+  signOut: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const supabase = createClient();
+
+  useEffect(() => {
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setIsLoading(false);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setSession(session);
+        setUser(session?.user ?? null);
       }
-      return part;
-    },
-  });
+    );
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const signInWithGoogle = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+  };
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+  };
+
+  return (
+    <AuthContext.Provider value={{ user, session, isLoading, signInWithGoogle, signOut }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
+  return context;
+};
+```
+
+### 1.4 Auth Callback Route
+
+```typescript
+// app/auth/callback/route.ts
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { NextResponse } from 'next/server';
+
+export async function GET(request: Request) {
+  const { searchParams, origin } = new URL(request.url);
+  const code = searchParams.get('code');
+  const next = searchParams.get('next') ?? '/';
+
+  if (code) {
+    const supabase = await createServerSupabaseClient();
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error) {
+      return NextResponse.redirect(`${origin}${next}`);
+    }
+  }
+
+  return NextResponse.redirect(`${origin}/auth/error`);
 }
 ```
 
-#### 2.2 Hybrid Execution Mode
-Some tools MUST run client-side (canvas mutations). Use a hybrid approach:
+### 1.5 Login UI Component
 
 ```typescript
-// Server-executable tools (v6 style)
-const analyzeCanvasTool = tool({
-  description: 'Analyze the current diagram',
-  inputSchema: z.object({}),
-  execute: async (args, { canvasService }) => {
-    return canvasService.analyze();
-  },
-});
+// components/auth/login-button.tsx
+'use client';
 
-// Client-only tools (still need onToolCall)
-const createShapeTool = tool({
-  description: 'Create a shape on canvas',
-  inputSchema: z.object({ ... }),
-  // No execute - handled client-side
-});
+import { useAuth } from '@/components/auth-provider';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+
+export function LoginButton() {
+  const { user, isLoading, signInWithGoogle, signOut } = useAuth();
+
+  if (isLoading) {
+    return <div className="w-8 h-8 rounded-full bg-muted animate-pulse" />;
+  }
+
+  if (!user) {
+    return (
+      <Button onClick={signInWithGoogle} variant="outline" size="sm">
+        <GoogleIcon className="w-4 h-4 mr-2" />
+        Sign in with Google
+      </Button>
+    );
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+          <Avatar className="h-8 w-8">
+            <AvatarImage src={user.user_metadata.avatar_url} />
+            <AvatarFallback>{user.email?.[0].toUpperCase()}</AvatarFallback>
+          </Avatar>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem disabled className="font-normal">
+          {user.email}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={signOut}>
+          Sign out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 ```
 
 ---
 
-### Phase 3: UX Improvements (Week 3)
+## Phase 2: Diagram Persistence (Week 2)
 
-#### 3.1 Progressive Tool Results
-Show tool execution progress in UI:
+### 2.1 Diagram Service
 
 ```typescript
-// components/ai-chat/tool-progress.tsx
-export function ToolProgress({ toolName, status, result }: ToolProgressProps) {
+// lib/services/diagram-service.ts
+import { createClient } from '@/lib/supabase/client';
+import type { CanvasElement, SmartConnection } from '@/lib/types';
+
+export interface Diagram {
+  id: string;
+  user_id: string;
+  title: string;
+  elements: CanvasElement[];
+  connections: SmartConnection[];
+  viewport: { x: number; y: number; zoom: number };
+  theme: string;
+  is_public: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export class DiagramService {
+  private supabase = createClient();
+
+  async list(): Promise<Diagram[]> {
+    const { data, error } = await this.supabase
+      .from('diagrams')
+      .select('*')
+      .order('updated_at', { ascending: false });
+    
+    if (error) throw error;
+    return data;
+  }
+
+  async get(id: string): Promise<Diagram | null> {
+    const { data, error } = await this.supabase
+      .from('diagrams')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) return null;
+    return data;
+  }
+
+  async create(diagram: Partial<Diagram>): Promise<Diagram> {
+    const { data: { user } } = await this.supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data, error } = await this.supabase
+      .from('diagrams')
+      .insert({
+        user_id: user.id,
+        title: diagram.title || 'Untitled Diagram',
+        elements: diagram.elements || [],
+        connections: diagram.connections || [],
+        viewport: diagram.viewport || { x: 0, y: 0, zoom: 1 },
+        theme: diagram.theme || 'dark',
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async update(id: string, updates: Partial<Diagram>): Promise<Diagram> {
+    const { data, error } = await this.supabase
+      .from('diagrams')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async delete(id: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('diagrams')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  }
+
+  // Auto-save with debounce (called from Zustand store)
+  async autoSave(id: string, elements: CanvasElement[], connections: SmartConnection[]): Promise<void> {
+    await this.update(id, { elements, connections });
+  }
+}
+
+export const diagramService = new DiagramService();
+```
+
+### 2.2 Update Zustand Store
+
+```typescript
+// lib/store.ts (updated)
+import { create } from 'zustand';
+import { diagramService } from '@/lib/services/diagram-service';
+import debounce from 'lodash.debounce';
+
+interface CanvasStore {
+  // ... existing state
+  diagramId: string | null;
+  isSaving: boolean;
+  lastSaved: Date | null;
+  
+  // New actions
+  loadDiagram: (id: string) => Promise<void>;
+  saveDiagram: () => Promise<void>;
+  createNewDiagram: () => Promise<string>;
+}
+
+export const useCanvasStore = create<CanvasStore>((set, get) => ({
+  // ... existing implementation
+  
+  diagramId: null,
+  isSaving: false,
+  lastSaved: null,
+
+  loadDiagram: async (id) => {
+    const diagram = await diagramService.get(id);
+    if (diagram) {
+      set({
+        elements: diagram.elements,
+        connections: diagram.connections,
+        diagramId: diagram.id,
+      });
+    }
+  },
+
+  saveDiagram: debounce(async () => {
+    const { diagramId, elements, connections } = get();
+    if (!diagramId) return;
+    
+    set({ isSaving: true });
+    try {
+      await diagramService.autoSave(diagramId, elements, connections);
+      set({ lastSaved: new Date() });
+    } finally {
+      set({ isSaving: false });
+    }
+  }, 2000), // Debounce 2 seconds
+
+  createNewDiagram: async () => {
+    const diagram = await diagramService.create({});
+    set({ 
+      diagramId: diagram.id,
+      elements: [],
+      connections: [],
+    });
+    return diagram.id;
+  },
+}));
+```
+
+### 2.3 Diagram List Page
+
+```typescript
+// app/diagrams/page.tsx
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useAuth } from '@/components/auth-provider';
+import { diagramService, type Diagram } from '@/lib/services/diagram-service';
+import { DiagramCard } from '@/components/diagrams/diagram-card';
+import { Button } from '@/components/ui/button';
+import { Plus } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+
+export default function DiagramsPage() {
+  const { user, isLoading: authLoading } = useAuth();
+  const [diagrams, setDiagrams] = useState<Diagram[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      diagramService.list().then(setDiagrams).finally(() => setIsLoading(false));
+    }
+  }, [user, authLoading]);
+
+  const handleCreateNew = async () => {
+    const diagram = await diagramService.create({});
+    router.push(`/diagram/${diagram.id}`);
+  };
+
+  if (!user) {
+    return <div>Please sign in to view your diagrams</div>;
+  }
+
   return (
-    <div className="tool-progress">
-      <div className="tool-header">
-        {getToolIcon(toolName)}
-        <span>{getToolDisplayName(toolName)}</span>
-        <StatusBadge status={status} />
+    <div className="container mx-auto py-8">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">My Diagrams</h1>
+        <Button onClick={handleCreateNew}>
+          <Plus className="w-4 h-4 mr-2" />
+          New Diagram
+        </Button>
       </div>
-      {status === 'executing' && <Spinner />}
-      {status === 'complete' && <ToolResultPreview result={result} />}
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {diagrams.map((diagram) => (
+          <DiagramCard key={diagram.id} diagram={diagram} />
+        ))}
+      </div>
     </div>
   );
 }
 ```
 
-#### 3.2 Tool Confirmation Mode
-Allow users to preview and confirm tool actions:
+---
+
+## Phase 3: Chat History Migration (Week 3)
+
+### 3.1 Chat Service
 
 ```typescript
-const createFlowchartTool = tool({
-  description: 'Create a flowchart',
-  inputSchema: z.object({ ... }),
-  // Return preview, don't execute immediately
-  execute: async (args) => {
-    const preview = generateFlowchartPreview(args);
-    return { 
-      type: 'preview',
-      preview,
-      confirmationRequired: true,
-    };
-  },
-});
-```
+// lib/services/chat-service.ts
+import { createClient } from '@/lib/supabase/client';
+import type { UIMessage } from 'ai';
 
-#### 3.3 Undo/Redo Integration
-Track tool executions for undo:
+export interface ChatSession {
+  id: string;
+  user_id: string;
+  diagram_id: string | null;
+  title: string;
+  model: string;
+  created_at: string;
+  updated_at: string;
+}
 
-```typescript
-// After each tool execution
-canvasStore.pushToHistory({
-  action: 'tool-execution',
-  toolName: 'createFlowchart',
-  before: previousState,
-  after: currentState,
-});
-```
+export interface ChatMessage {
+  id: string;
+  session_id: string;
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content: string | null;
+  parts: any[] | null;
+  tool_calls: any[] | null;
+  tool_results: any[] | null;
+  created_at: string;
+}
 
-#### 3.4 Smart Tool Selection
-Improve tool descriptions and add examples:
+export class ChatService {
+  private supabase = createClient();
 
-```typescript
-const createFlowchartTool = tool({
-  description: `Create a flowchart diagram with connected nodes.
+  // Sessions
+  async createSession(diagramId?: string): Promise<ChatSession> {
+    const { data: { user } } = await this.supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data, error } = await this.supabase
+      .from('chat_sessions')
+      .insert({
+        user_id: user.id,
+        diagram_id: diagramId || null,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async getSession(id: string): Promise<ChatSession | null> {
+    const { data } = await this.supabase
+      .from('chat_sessions')
+      .select('*')
+      .eq('id', id)
+      .single();
+    return data;
+  }
+
+  async listSessions(diagramId?: string): Promise<ChatSession[]> {
+    let query = this.supabase
+      .from('chat_sessions')
+      .select('*')
+      .order('updated_at', { ascending: false });
     
-WHEN TO USE:
-- User asks for a flowchart, process flow, or decision tree
-- User describes a sequence of steps with decisions
-- User wants to visualize a workflow
+    if (diagramId) {
+      query = query.eq('diagram_id', diagramId);
+    }
 
-EXAMPLE REQUESTS:
-- "Create a flowchart for user authentication"
-- "Draw a process flow for order fulfillment"
-- "Make a decision tree for loan approval"`,
-  inputSchema: z.object({ ... }),
-});
+    const { data } = await query;
+    return data || [];
+  }
+
+  // Messages
+  async getMessages(sessionId: string): Promise<UIMessage[]> {
+    const { data } = await this.supabase
+      .from('chat_messages')
+      .select('*')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: true });
+
+    return (data || []).map(this.dbMessageToUIMessage);
+  }
+
+  async saveMessage(sessionId: string, message: UIMessage): Promise<void> {
+    const { error } = await this.supabase
+      .from('chat_messages')
+      .insert({
+        session_id: sessionId,
+        role: message.role,
+        content: typeof message.content === 'string' ? message.content : null,
+        parts: message.parts || null,
+      });
+
+    if (error) throw error;
+
+    // Update session timestamp
+    await this.supabase
+      .from('chat_sessions')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', sessionId);
+  }
+
+  async clearSession(sessionId: string): Promise<void> {
+    await this.supabase
+      .from('chat_messages')
+      .delete()
+      .eq('session_id', sessionId);
+  }
+
+  private dbMessageToUIMessage(msg: ChatMessage): UIMessage {
+    return {
+      id: msg.id,
+      role: msg.role as any,
+      content: msg.content || '',
+      parts: msg.parts || undefined,
+    };
+  }
+}
+
+export const chatService = new ChatService();
 ```
 
----
+### 3.2 Update AI Chat Panel
 
-### Phase 4: Testing & Rollout (Week 4)
-
-#### 4.1 Test Cases
-- [ ] Unit tests for each tool's execute function
-- [ ] Integration tests for multi-step reasoning
-- [ ] E2E tests for complete diagram generation flows
-- [ ] Performance benchmarks (v5 vs v6)
-- [ ] Error handling and recovery
-
-#### 4.2 Feature Flags
 ```typescript
-// lib/feature-flags.ts
-export const AI_SDK_V6_ENABLED = process.env.NEXT_PUBLIC_AI_SDK_V6 === 'true';
-```
+// components/ai-chat-panel.tsx (updated)
+import { chatService } from '@/lib/services/chat-service';
+import { useAuth } from '@/components/auth-provider';
 
-#### 4.3 Gradual Rollout
-1. Deploy v6 behind feature flag
-2. A/B test with 10% of users
-3. Monitor error rates and performance
-4. Increase rollout percentage
-5. Full migration
+export function AIChatPanel({ diagramId, ...props }: AIChatPanelProps) {
+  const { user } = useAuth();
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+
+  // Initialize or load chat session
+  useEffect(() => {
+    if (!user) {
+      setIsLoadingHistory(false);
+      return;
+    }
+
+    async function initSession() {
+      // Try to find existing session for this diagram
+      const sessions = await chatService.listSessions(diagramId);
+      
+      if (sessions.length > 0) {
+        setSessionId(sessions[0].id);
+        const messages = await chatService.getMessages(sessions[0].id);
+        setMessages(messages);
+      } else {
+        // Create new session
+        const session = await chatService.createSession(diagramId);
+        setSessionId(session.id);
+      }
+      
+      setIsLoadingHistory(false);
+    }
+
+    initSession();
+  }, [user, diagramId]);
+
+  // Save messages to Supabase instead of Blob/localStorage
+  useEffect(() => {
+    if (!sessionId || messages.length === 0) return;
+    
+    const lastMessage = messages[messages.length - 1];
+    chatService.saveMessage(sessionId, lastMessage);
+  }, [messages, sessionId]);
+
+  // ... rest of component
+}
+```
 
 ---
 
-## Tool Inventory & Refactoring Notes
+## Phase 4: AI SDK v6 Migration (Week 4)
 
-### Current Tools (Prioritized)
+### 4.1 Update Dependencies
 
-| Tool | Server-Exec? | Priority | Notes |
-|------|-------------|----------|-------|
-| `getCanvasState` | ✅ Yes | P0 | Pure read, no side effects |
-| `createFlowchart` | Hybrid | P0 | Layout server-side, mutations client |
-| `createNetworkDiagram` | Hybrid | P0 | Fix schema mismatch (done) |
-| `createOrgChart` | Hybrid | P1 | |
-| `createERDiagram` | Hybrid | P1 | |
-| `createMindMap` | Hybrid | P1 | |
-| `createMolecule` | Hybrid | P2 | |
-| `createShape` | ❌ Client | P1 | Direct canvas mutation |
-| `updateShape` | ❌ Client | P1 | Direct canvas mutation |
-| `updateStyles` | ❌ Client | P1 | Direct canvas mutation |
-| `clearCanvas` | ❌ Client | P2 | Direct canvas mutation |
-| `analyzeDiagram` | ✅ Yes | P2 | Pure computation |
-| `beautifyDiagram` | Hybrid | P2 | |
-| `placeImage` | Hybrid | P2 | Image processing server-side |
+```bash
+pnpm add ai@6.0.0-beta @ai-sdk/gateway@3.0.0 @ai-sdk/react@3.0.0
+```
 
-### New Tools to Add
+### 4.2 New Tool Structure
 
-| Tool | Description | Priority |
-|------|-------------|----------|
-| `exportDiagram` | Export as PNG/SVG/JSON | P1 |
-| `importDiagram` | Import from JSON/image | P1 |
-| `suggestImprovements` | AI-powered diagram feedback | P2 |
-| `convertDiagram` | Convert between diagram types | P2 |
-| `groupElements` | Group selected elements | P3 |
-| `alignElements` | Auto-align elements | P3 |
+```
+lib/
+├── tools/
+│   ├── index.ts
+│   ├── diagram-tools.ts
+│   ├── shape-tools.ts
+│   └── canvas-tools.ts
+├── services/
+│   ├── canvas-service.ts
+│   ├── diagram-service.ts
+│   └── chat-service.ts
+└── supabase/
+    ├── client.ts
+    └── server.ts
+```
+
+### 4.3 Updated API Route with Multi-Step Reasoning
+
+```typescript
+// app/api/ai-chat/route.ts
+import { streamText, stepCountIs } from 'ai';
+import { gateway } from '@ai-sdk/gateway';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { diagramTools } from '@/lib/tools/diagram-tools';
+
+export const maxDuration = 60;
+
+export async function POST(req: Request) {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+  const { messages, diagramId, canvasState, theme } = await req.json();
+
+  const result = await streamText({
+    model: gateway('anthropic/claude-opus-4.5'),
+    system: getSystemPrompt(theme, canvasState),
+    messages,
+    stopWhen: stepCountIs(5),
+    tools: {
+      ...diagramTools,
+    },
+  });
+
+  return result.toUIMessageStreamResponse();
+}
+```
+
+---
+
+## Phase 5: Cleanup & Testing (Week 5)
+
+### 5.1 Remove Deprecated Code
+
+- [ ] Delete `app/api/chat-history/route.ts`
+- [ ] Delete `app/api/upload/route.ts` (if using Blob for images)
+- [ ] Remove localStorage fallback logic from `ai-chat-panel.tsx`
+- [ ] Remove `@vercel/blob` from `package.json`
+- [ ] Remove `BLOB_READ_WRITE_TOKEN` from environment
+
+### 5.2 Test Cases
+
+- [ ] Google OAuth sign in/out flow
+- [ ] Profile creation on first sign in
+- [ ] Diagram CRUD operations
+- [ ] Chat session creation and message persistence
+- [ ] Cross-device sync (sign in on different browser)
+- [ ] RLS policies (can't access other users' data)
+- [ ] AI tool execution with authenticated context
+
+### 5.3 Migration Script for Existing Users
+
+```typescript
+// scripts/migrate-localstorage.ts
+// Run client-side to migrate existing localStorage data to Supabase
+
+async function migrateLocalStorage() {
+  const localData = localStorage.getItem('drawit-canvas');
+  if (!localData) return;
+
+  const { elements, connections } = JSON.parse(localData);
+  
+  // Create a new diagram with the localStorage data
+  const diagram = await diagramService.create({
+    title: 'Migrated from Local Storage',
+    elements,
+    connections,
+  });
+
+  // Clear localStorage after successful migration
+  localStorage.removeItem('drawit-canvas');
+  
+  return diagram.id;
+}
+```
+
+---
+
+## New Dependencies
+
+```json
+{
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "@supabase/ssr": "^0.5.0",
+    "ai": "^6.0.0-beta",
+    "@ai-sdk/gateway": "^3.0.0",
+    "@ai-sdk/react": "^3.0.0"
+  }
+}
+```
+
+**Removed:**
+- `@vercel/blob`
+
+---
+
+## Environment Variables
+
+```bash
+# Required (NEW)
+NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+
+# Required (EXISTING)
+AI_GATEWAY_API_KEY=...
+
+# Deprecated (REMOVE)
+# BLOB_READ_WRITE_TOKEN
+```
+
+---
+
+## Timeline Summary
+
+| Week | Phase | Deliverables |
+|------|-------|--------------|
+| 0 | Supabase Setup | Project, OAuth, schema, RLS |
+| 1 | Authentication | Google OAuth, auth provider, UI |
+| 2 | Diagram Storage | Diagram service, auto-save, list page |
+| 3 | Chat History | Chat service, session management |
+| 4 | AI SDK v6 | Tool refactor, multi-step reasoning |
+| 5 | Cleanup | Remove Blob, testing, migration |
 
 ---
 
@@ -379,57 +973,23 @@ export const AI_SDK_V6_ENABLED = process.env.NEXT_PUBLIC_AI_SDK_V6 === 'true';
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| v6 beta instability | High | Feature flag, fallback to v5 |
-| Breaking changes in v6 GA | Medium | Pin versions, monitor changelog |
-| Performance regression | Medium | Benchmark, lazy load tools |
-| Client/server state sync | High | Optimistic updates, conflict resolution |
+| Data loss during migration | High | Keep localStorage as readonly backup for 30 days |
+| Supabase cold start latency | Medium | Use connection pooling, edge functions |
+| OAuth redirect issues | Medium | Test across browsers, handle errors gracefully |
+| RLS policy errors | High | Extensive testing, use service role for admin |
 
 ---
 
 ## Success Metrics
 
-1. **Tool Execution Time**: < 500ms for simple tools, < 2s for diagram generation
-2. **Multi-Step Success Rate**: > 90% of multi-step tasks complete successfully
-3. **User Satisfaction**: Improvement in diagram quality ratings
-4. **Error Rate**: < 1% tool execution failures
-5. **Code Maintainability**: Tool definitions < 50 lines each, single responsibility
-
----
-
-## Dependencies
-
-```json
-{
-  "ai": "^6.0.0-beta",
-  "@ai-sdk/gateway": "^3.0.0",
-  "@ai-sdk/react": "^3.0.0"
-}
-```
-
----
-
-## Timeline
-
-| Week | Phase | Deliverables |
-|------|-------|--------------|
-| 1 | Tool Architecture | New tool structure, canvas service |
-| 2 | API Restructure | v6 route, hybrid execution |
-| 3 | UX Improvements | Progress UI, confirmations, undo |
-| 4 | Testing & Rollout | Tests, feature flags, gradual rollout |
-
----
-
-## Next Steps
-
-1. [ ] Review and approve this plan
-2. [ ] Create feature branch `feat/ai-sdk-v6`
-3. [ ] Set up v6 beta dependencies in parallel
-4. [ ] Begin Phase 1: Tool architecture refactor
-5. [ ] Schedule weekly sync to review progress
+1. **Auth Conversion**: > 50% of active users sign in
+2. **Data Persistence**: 0 reported data loss incidents
+3. **Cross-Device Usage**: > 20% of users access from multiple devices
+4. **Query Performance**: < 100ms for diagram load
+5. **Auto-Save Reliability**: > 99.9% successful saves
 
 ---
 
 *Last Updated: December 8, 2025*
 *Author: AI Assistant*
 *Status: Draft - Pending Review*
-
