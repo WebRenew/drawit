@@ -858,7 +858,7 @@ export function AIChatPanel({ onPreviewChange, canvasDimensions, onElementsCreat
       </div>
 
       {/* Messages */}
-      <div className="flex-1 flex-shrink overflow-y-auto p-3 min-h-0 pb-2">
+      <div className="flex-1 flex-shrink overflow-y-auto p-3 min-h-0 pb-2 scrollbar-geist">
         <ChatMessages messages={messages} isLoading={isLoading} />
         
         {/* Background processing indicator */}

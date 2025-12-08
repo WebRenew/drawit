@@ -488,6 +488,47 @@
     display: none;
   }
 
+  /* Geist-style minimal scrollbar */
+  .scrollbar-geist {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  .scrollbar-geist:hover {
+    scrollbar-color: hsl(var(--foreground) / 0.15) transparent;
+  }
+  .scrollbar-geist::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-geist::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-geist::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+    transition: background 0.2s ease;
+  }
+  .scrollbar-geist:hover::-webkit-scrollbar-thumb {
+    background: hsl(var(--foreground) / 0.15);
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  .scrollbar-geist::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--foreground) / 0.25);
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  .scrollbar-geist::-webkit-scrollbar-thumb:active {
+    background: hsl(var(--foreground) / 0.35);
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  .scrollbar-geist::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
   /* Touch-friendly tap targets on mobile */
   @media (max-width: 768px) {
     .touch-target {
