@@ -46,4 +46,8 @@ next-env.d.ts
 # Agents
 .claude/
 
+# Trigger.dev
 .trigger
+
+# Internal docs
+docs/
