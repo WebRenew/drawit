@@ -48,7 +48,7 @@ export function LoginButton() {
           </div>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={signOut} className="text-destructive cursor-pointer">
+        <DropdownMenuItem onClick={signOut} className="cursor-pointer">
           <LogOut className="w-4 h-4 mr-2" />
           Sign out
         </DropdownMenuItem>

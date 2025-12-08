@@ -8,7 +8,7 @@
 import { NextResponse } from "next/server"
 import { tasks } from "@trigger.dev/sdk/v3"
 import type { aiDiagramTask } from "@/src/trigger/ai-diagram"
-import { createClient } from "@/lib/supabase/server"
+import { createServerSupabaseClient } from "@/lib/supabase/server"
 
 export const maxDuration = 60
 
@@ -28,7 +28,7 @@ interface RequestBody {
 export async function POST(req: Request) {
   try {
     // Verify authentication
-    const supabase = await createClient()
+    const supabase = await createServerSupabaseClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     
     if (authError || !user) {

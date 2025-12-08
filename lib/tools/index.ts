@@ -10,6 +10,7 @@ export { canvasTools } from "./canvas-tools"
 export { diagramTools } from "./diagram-tools"
 export { shapeTools } from "./shape-tools"
 export { styleTools } from "./style-tools"
+export { backgroundTools } from "./background-tools"
 
 // Re-export all tools as a single object for convenience
 export { allTools } from "./all-tools"

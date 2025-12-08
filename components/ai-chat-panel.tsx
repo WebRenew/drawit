@@ -10,7 +10,7 @@ import { useState, useRef, useEffect, useMemo, useCallback } from "react"
 import { useChat } from "@ai-sdk/react"
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from "ai"
 import { useCanvasStore } from "@/lib/store"
-import { MessageSquare, X, Trash2, Cloud, CloudOff, Loader2, LogIn, Sparkles } from "lucide-react"
+import { MessageSquare, X, Trash2, Cloud, CloudOff, Loader2, LogIn, Sparkles, Zap } from "lucide-react"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -20,12 +20,14 @@ import type { UIMessage } from "@ai-sdk/react"
 import { useAuth } from "@/components/auth-provider"
 import { chatService, type ChatSession } from "@/lib/services/chat-service"
 import { debounce } from "@/lib/utils/debounce"
+import { useAIDiagram } from "@/hooks/use-ai-diagram"
 
 // Types and constants
 import type { ToolHandlerContext, ShapeRegistry, ShapeDataRegistry, AIChatPanelProps } from "@/lib/ai-chat/types"
 import { AVAILABLE_MODELS, DEFAULT_MODEL } from "@/lib/ai-chat/types"
 import { getCanvasInfo } from "@/lib/ai-chat/canvas-helpers"
 import type { CanvasElement, SmartConnection } from "@/lib/types"
+import type { RunBackgroundDiagramArgs } from "@/lib/tools/background-tools"
 
 // UI Components
 import { ChatMessages } from "@/components/ai-chat/chat-messages"
@@ -62,6 +64,33 @@ async function fileToBase64(file: File): Promise<string> {
   })
 }
 
+// Map diagram element types from Trigger.dev to canvas types
+function mapDiagramTypeToCanvasType(diagramType: string): CanvasElement["type"] {
+  const typeMap: Record<string, CanvasElement["type"]> = {
+    // Flowchart types
+    start: "ellipse",
+    end: "ellipse",
+    process: "rectangle",
+    decision: "diamond",
+    data: "rectangle",
+    document: "rectangle",
+    // Network types
+    server: "rectangle",
+    database: "rectangle",
+    client: "rectangle",
+    router: "diamond",
+    firewall: "rectangle",
+    cloud: "ellipse",
+    service: "rectangle",
+    // Generic types
+    rectangle: "rectangle",
+    ellipse: "ellipse",
+    diamond: "diamond",
+    circle: "ellipse",
+  }
+  return typeMap[diagramType] || "rectangle"
+}
+
 const CHAT_HISTORY_LOCAL_KEY = "drawit-chat-history"
 const SAVE_DEBOUNCE_MS = 2000
 
@@ -91,6 +120,14 @@ export function AIChatPanel({ onPreviewChange, canvasDimensions, onElementsCreat
   const addConnection = useCanvasStore((state) => state.addConnection)
   const updateElements = useCanvasStore((state) => state.updateElements)
   const clearAll = useCanvasStore((state) => state.clearAll)
+
+  // Background task hook for complex diagrams
+  const { 
+    status: backgroundStatus, 
+    progress: backgroundProgress, 
+    trigger: triggerBackground,
+    error: backgroundError,
+  } = useAIDiagram()
 
   const shapeRegistryRef = useRef<ShapeRegistry>(new Map())
   const shapeDataRef = useRef<ShapeDataRegistry>(new Map())
@@ -229,6 +266,76 @@ export function AIChatPanel({ onPreviewChange, canvasDimensions, onElementsCreat
           case "previewDiagram":
             result = handlePreviewDiagram(args)
             break
+          case "runBackgroundDiagram": {
+            // Handle background diagram generation via Trigger.dev
+            const bgArgs = args as RunBackgroundDiagramArgs
+            console.log("[v0] Running background diagram:", bgArgs.diagramType, bgArgs.complexity)
+            
+            try {
+              const bgResult = await triggerBackground({
+                prompt: bgArgs.prompt,
+                canvasInfo: canvasInfo,
+                theme: resolvedTheme || "dark",
+                diagramId: currentDiagramId || undefined,
+                model: selectedModel,
+              })
+              
+              if (bgResult && bgResult.elements.length > 0) {
+                // Convert background result to canvas elements
+                const newElements: CanvasElement[] = bgResult.elements.map((el) => ({
+                  id: el.id || nanoid(),
+                  type: mapDiagramTypeToCanvasType(el.type),
+                  x: el.x || canvasInfo.centerX,
+                  y: el.y || canvasInfo.centerY,
+                  width: el.width || 150,
+                  height: el.height || 60,
+                  strokeColor: el.strokeColor || (resolvedTheme === "dark" ? "#ffffff" : "#000000"),
+                  backgroundColor: el.backgroundColor || "transparent",
+                  roughness: 0,
+                  strokeWidth: 2,
+                  strokeStyle: "solid",
+                  angle: 0,
+                  seed: Math.floor(Math.random() * 100000),
+                  label: el.label,
+                  labelColor: resolvedTheme === "dark" ? "#ffffff" : "#000000",
+                  labelFontSize: 14,
+                  labelFontWeight: "normal",
+                  labelPadding: 8,
+                }))
+                
+                // Clear existing and add new elements
+                clearAll()
+                newElements.forEach((el) => addElement(el))
+                
+                // Add connections
+                bgResult.connections.forEach((conn) => {
+                  addConnection({
+                    sourceId: conn.from,
+                    targetId: conn.to,
+                    sourceHandle: "bottom",
+                    targetHandle: "top",
+                    strokeColor: resolvedTheme === "dark" ? "#ffffff" : "#000000",
+                    strokeWidth: 2,
+                    routingType: "smoothstep",
+                    label: conn.label,
+                  })
+                })
+                
+                result = {
+                  success: true,
+                  elementsCreated: newElements.length,
+                  connectionsCreated: bgResult.connections.length,
+                  summary: bgResult.summary,
+                }
+              } else {
+                result = { error: "Background task completed but no elements were created" }
+              }
+            } catch (bgError) {
+              console.error("[v0] Background diagram error:", bgError)
+              result = { error: bgError instanceof Error ? bgError.message : "Background task failed" }
+            }
+            break
+          }
           default:
             result = { error: `Unknown tool: ${toolCall.toolName}` }
         }
@@ -697,6 +804,25 @@ export function AIChatPanel({ onPreviewChange, canvasDimensions, onElementsCreat
       {/* Messages */}
       <div className="flex-1 flex-shrink overflow-y-auto p-3 min-h-0 pb-2">
         <ChatMessages messages={messages} isLoading={isLoading} />
+        
+        {/* Background processing indicator */}
+        {(backgroundStatus === "triggering" || backgroundStatus === "running") && (
+          <div className="flex items-center gap-2 p-3 my-2 bg-primary/10 rounded-lg border border-primary/20">
+            <Zap className="h-4 w-4 text-primary animate-pulse" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-primary">Background Processing</p>
+              <p className="text-xs text-muted-foreground">{backgroundProgress || "Generating complex diagram..."}</p>
+            </div>
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          </div>
+        )}
+        
+        {backgroundError && (
+          <div className="flex items-center gap-2 p-3 my-2 bg-destructive/10 rounded-lg border border-destructive/20">
+            <p className="text-sm text-destructive">{backgroundError}</p>
+          </div>
+        )}
+        
         <div className="h-8" />
         <div ref={messagesEndRef} />
       </div>
