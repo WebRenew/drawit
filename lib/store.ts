@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware"
 import type { CanvasElement, SmartConnection } from "@/lib/types"
 import { diagramService, type Diagram } from "@/lib/services/diagram-service"
 import { debounce } from "@/lib/utils/debounce"
+import { createClient } from "@/lib/supabase/client"
 
 // Auto-save delay in milliseconds
 const AUTO_SAVE_DELAY = 2000
@@ -47,23 +48,86 @@ interface CanvasState {
 // Debounced auto-save function (created outside store to maintain reference)
 let debouncedAutoSave: ReturnType<typeof debounce> | null = null
 
+// Track if we're in the process of auto-creating a diagram
+let isAutoCreating = false
+
 export const useCanvasStore = create<CanvasState>()(
   persist(
     (set, get) => {
+      // Auto-create diagram for logged-in users
+      const ensureDiagramExists = async () => {
+        const state = get()
+        
+        // Already have a diagram or already creating one
+        if (state.currentDiagramId || isAutoCreating || state.isLoading) {
+          return
+        }
+
+        // Check if user is logged in
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        
+        if (!user) {
+          // Not logged in, skip auto-create
+          return
+        }
+
+        // Auto-create a new diagram
+        isAutoCreating = true
+        try {
+          const diagram = await diagramService.create({
+            title: "Untitled Diagram",
+            elements: state.elements,
+            connections: state.connections,
+          })
+          set({
+            currentDiagramId: diagram.id,
+            currentDiagram: diagram,
+            lastSaved: new Date(),
+          })
+          console.log("Auto-created diagram:", diagram.id)
+        } catch (error) {
+          console.error("Failed to auto-create diagram:", error)
+        } finally {
+          isAutoCreating = false
+        }
+      }
+
+      // Save to Supabase
+      const saveToSupabase = async () => {
+        const state = get()
+        if (!state.currentDiagramId || state.isSaving) return
+
+        set({ isSaving: true, saveError: null })
+        try {
+          await diagramService.autoSave(
+            state.currentDiagramId,
+            state.elements,
+            state.connections
+          )
+          set({ isSaving: false, lastSaved: new Date() })
+        } catch (error) {
+          console.error("Auto-save to Supabase failed:", error)
+          set({ 
+            isSaving: false, 
+            saveError: error instanceof Error ? error.message : "Save failed" 
+          })
+        }
+      }
+
       // Initialize debounced auto-save
       const triggerAutoSave = () => {
         const state = get()
-        if (state.currentDiagramId && !state.isSaving) {
-          set({ isSaving: true, saveError: null })
-          diagramService
-            .autoSave(state.currentDiagramId, state.elements, state.connections)
-            .then(() => {
-              set({ isSaving: false, lastSaved: new Date() })
-            })
-            .catch((error) => {
-              console.error("Auto-save failed:", error)
-              set({ isSaving: false, saveError: error.message })
-            })
+        if (state.currentDiagramId) {
+          saveToSupabase()
+        } else {
+          // Try to auto-create diagram first
+          ensureDiagramExists().then(() => {
+            const newState = get()
+            if (newState.currentDiagramId) {
+              saveToSupabase()
+            }
+          })
         }
       }
 
@@ -86,20 +150,14 @@ export const useCanvasStore = create<CanvasState>()(
           set((state) => ({
             elements: [...state.elements, element],
           }))
-          // Trigger auto-save if we have a diagram loaded
-          if (get().currentDiagramId) {
-            debouncedAutoSave?.()
-          }
+          debouncedAutoSave?.()
         },
 
         updateElements: (updater) => {
           set((state) => ({
             elements: updater(state.elements),
           }))
-          // Trigger auto-save if we have a diagram loaded
-          if (get().currentDiagramId) {
-            debouncedAutoSave?.()
-          }
+          debouncedAutoSave?.()
         },
 
         clearElements: () => {
@@ -113,18 +171,14 @@ export const useCanvasStore = create<CanvasState>()(
           set((state) => ({
             connections: [...state.connections, connection],
           }))
-          if (get().currentDiagramId) {
-            debouncedAutoSave?.()
-          }
+          debouncedAutoSave?.()
         },
 
         updateConnections: (updater) => {
           set((state) => ({
             connections: updater(state.connections),
           }))
-          if (get().currentDiagramId) {
-            debouncedAutoSave?.()
-          }
+          debouncedAutoSave?.()
         },
 
         clearConnections: () => {
@@ -167,14 +221,20 @@ export const useCanvasStore = create<CanvasState>()(
 
         saveDiagram: async () => {
           const state = get()
-          if (!state.currentDiagramId) return
+          if (!state.currentDiagramId) {
+            // Try to create one first
+            await ensureDiagramExists()
+          }
+          
+          const newState = get()
+          if (!newState.currentDiagramId) return
 
           set({ isSaving: true, saveError: null })
           try {
             await diagramService.autoSave(
-              state.currentDiagramId,
-              state.elements,
-              state.connections
+              newState.currentDiagramId,
+              newState.elements,
+              newState.connections
             )
             set({ isSaving: false, lastSaved: new Date() })
           } catch (error) {
