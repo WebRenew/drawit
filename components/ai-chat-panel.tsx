@@ -58,6 +58,9 @@ import {
   handleCreateWorkflow,
 } from "@/lib/ai-chat/tool-handlers"
 
+// Connection utilities for proper SmartConnection creation
+import { convertBackgroundConnections } from "@/lib/ai-chat/connection-helpers"
+
 async function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -119,6 +122,7 @@ export function AIChatPanel({ onPreviewChange, canvasDimensions, onElementsCreat
   const currentDiagramId = useCanvasStore((state) => state.currentDiagramId)
 
   const elements = useCanvasStore((state) => state.elements)
+  const connections = useCanvasStore((state) => state.connections)
   const addElement = useCanvasStore((state) => state.addElement)
   const addConnection = useCanvasStore((state) => state.addConnection)
   const updateElements = useCanvasStore((state) => state.updateElements)
@@ -209,6 +213,14 @@ export function AIChatPanel({ onPreviewChange, canvasDimensions, onElementsCreat
       headers: () => ({
         "x-selected-model": selectedModel,
       }),
+      // Include current canvas state in every request so agent always knows what's on canvas
+      // This is critical for new conversations or when chat history is cleared
+      body: () => ({
+        canvasInfo: canvasInfo,
+        theme: resolvedTheme || "dark",
+        elements: useCanvasStore.getState().elements,
+        connections: useCanvasStore.getState().connections,
+      }),
     }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
 
@@ -294,50 +306,59 @@ export function AIChatPanel({ onPreviewChange, canvasDimensions, onElementsCreat
               })
               
               if (bgResult && bgResult.elements.length > 0) {
+                const isDark = resolvedTheme === "dark"
+                const defaultStroke = isDark ? "#ffffff" : "#1e1e1e"
+                const defaultLabel = isDark ? "#ffffff" : "#1e1e1e"
+                
                 // Convert background result to canvas elements
+                // Use the el.id from background task to maintain connection references
                 const newElements: CanvasElement[] = bgResult.elements.map((el) => ({
                   id: el.id || nanoid(),
                   type: mapDiagramTypeToCanvasType(el.type),
-                  x: el.x || canvasInfo.centerX,
-                  y: el.y || canvasInfo.centerY,
+                  x: el.x ?? canvasInfo.centerX,
+                  y: el.y ?? canvasInfo.centerY,
                   width: el.width || 150,
                   height: el.height || 60,
-                  strokeColor: el.strokeColor || (resolvedTheme === "dark" ? "#ffffff" : "#000000"),
+                  strokeColor: el.strokeColor || defaultStroke,
                   backgroundColor: el.backgroundColor || "transparent",
                   roughness: 0,
                   strokeWidth: 2,
-                  strokeStyle: "solid",
+                  strokeStyle: "solid" as const,
                   angle: 0,
                   seed: Math.floor(Math.random() * 100000),
+                  isLocked: false,
+                  opacity: 100,
+                  connectable: true, // Enable smart connections
                   label: el.label,
-                  labelColor: resolvedTheme === "dark" ? "#ffffff" : "#000000",
+                  labelColor: defaultLabel,
                   labelFontSize: 14,
-                  labelFontWeight: "normal",
-                  labelPadding: 8,
+                  labelFontWeight: "500",
+                  labelPadding: 10,
                 }))
                 
                 // Clear existing and add new elements
                 clearAll()
                 newElements.forEach((el) => addElement(el))
                 
-                // Add connections
-                bgResult.connections.forEach((conn) => {
-                  addConnection({
-                    sourceId: conn.from,
-                    targetId: conn.to,
-                    sourceHandle: "bottom",
-                    targetHandle: "top",
-                    strokeColor: resolvedTheme === "dark" ? "#ffffff" : "#000000",
-                    strokeWidth: 2,
-                    routingType: "smoothstep",
-                    label: conn.label,
-                  })
+                // Convert and add connections using shared utility
+                // This properly sets pathType (not routingType), arrowHeadEnd, and auto-calculates handles
+                const smartConnections = convertBackgroundConnections(
+                  bgResult.connections,
+                  {
+                    elements: newElements,
+                    strokeColor: defaultStroke,
+                    isDarkMode: isDark,
+                  }
+                )
+                
+                smartConnections.forEach((conn) => {
+                  addConnectionMutation(conn)
                 })
                 
                 result = {
                   success: true,
                   elementsCreated: newElements.length,
-                  connectionsCreated: bgResult.connections.length,
+                  connectionsCreated: smartConnections.length,
                   summary: bgResult.summary,
                 }
               } else {
@@ -632,46 +653,48 @@ export function AIChatPanel({ onPreviewChange, canvasDimensions, onElementsCreat
         const successfulUploads = uploadResults.filter(r => r.success && r.url)
 
         if (successfulUploads.length === 0) {
-          console.error("[v0] All image uploads failed")
+          console.error("[v0] All image uploads failed, using base64 fallback")
           // Fallback: try with base64
           const dataUrls = await Promise.all(
             imagesToSend.map(async (img) => img.file ? await fileToBase64(img.file) : img.url)
           )
-          const contentParts: Array<{ type: "text"; text: string } | { type: "file"; url: string; mediaType: string }> = [
-            { type: "text", text: messageText || "Please analyze this image and recreate what you see." },
-          ]
-          imagesToSend.forEach((img, i) => {
-            contentParts.push({ type: "file", url: dataUrls[i], mediaType: img.file?.type || "image/png" })
+          // Update ref with base64 URLs for placeImage tool
+          uploadedImagesRef.current = dataUrls
+          console.log("[v0] Updated uploadedImagesRef with", dataUrls.length, "base64 URLs (fallback)")
+          
+          // AI SDK v6: sendMessage uses { text, files } format
+          const fileParts = imagesToSend.map((img, i) => ({
+            type: "file" as const,
+            mediaType: img.file?.type || "image/png",
+            url: dataUrls[i],
+          }))
+          sendMessage({
+            text: messageText || "Please analyze this image and recreate what you see.",
+            files: fileParts,
           })
-          sendMessage({ role: "user", content: contentParts })
           return
         }
 
         console.log("[v0] Images uploaded, sending URLs:", successfulUploads.length)
 
-        // Build content parts with Supabase URLs (much smaller payload!)
-        const contentParts: Array<{ type: "text"; text: string } | { type: "file"; url: string; mediaType: string }> = []
-        
-        // Add text part
-        if (messageText) {
-          contentParts.push({ type: "text", text: messageText })
-        } else {
-          contentParts.push({ type: "text", text: "Please analyze this image and recreate what you see." })
-        }
-        
-        // Add file parts with Supabase URLs
-        successfulUploads.forEach((upload, i) => {
+        // IMPORTANT: Update uploadedImagesRef with Supabase URLs for placeImage tool
+        // This must happen BEFORE sending the message so AI can use these URLs
+        uploadedImagesRef.current = successfulUploads.map(u => u.url!)
+        console.log("[v0] Updated uploadedImagesRef with", uploadedImagesRef.current.length, "Supabase URLs")
+
+        // AI SDK v6: sendMessage uses { text, files } format
+        const fileParts = successfulUploads.map((upload, i) => {
           const originalImg = imagesToSend[i]
-          contentParts.push({
-            type: "file",
-            url: upload.url!,
+          return {
+            type: "file" as const,
             mediaType: originalImg?.file?.type || "image/png",
-          })
+            url: upload.url!,
+          }
         })
 
         sendMessage({
-          role: "user",
-          content: contentParts,
+          text: messageText || "Please analyze this image and recreate what you see.",
+          files: fileParts,
         })
       } else if (imagesToSend.length > 0 && !user) {
         // Not logged in - use base64 fallback
@@ -679,13 +702,20 @@ export function AIChatPanel({ onPreviewChange, canvasDimensions, onElementsCreat
         const dataUrls = await Promise.all(
           imagesToSend.map(async (img) => img.file ? await fileToBase64(img.file) : img.url)
         )
-        const contentParts: Array<{ type: "text"; text: string } | { type: "file"; url: string; mediaType: string }> = [
-          { type: "text", text: messageText || "Please analyze this image and recreate what you see." },
-        ]
-        imagesToSend.forEach((img, i) => {
-          contentParts.push({ type: "file", url: dataUrls[i], mediaType: img.file?.type || "image/png" })
+        // Update ref with base64 URLs for placeImage tool
+        uploadedImagesRef.current = dataUrls
+        console.log("[v0] Updated uploadedImagesRef with", dataUrls.length, "base64 URLs (not logged in)")
+        
+        // AI SDK v6: sendMessage uses { text, files } format
+        const fileParts = imagesToSend.map((img, i) => ({
+          type: "file" as const,
+          mediaType: img.file?.type || "image/png",
+          url: dataUrls[i],
+        }))
+        sendMessage({
+          text: messageText || "Please analyze this image and recreate what you see.",
+          files: fileParts,
         })
-        sendMessage({ role: "user", content: contentParts })
       } else {
         sendMessage({ text: messageText })
       }

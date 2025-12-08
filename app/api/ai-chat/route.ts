@@ -11,6 +11,8 @@ import type { UIMessage } from "ai"
 import { streamText, convertToModelMessages } from "ai"
 import { gateway } from "@ai-sdk/gateway"
 import { allTools } from "@/lib/tools"
+import { createCanvasContextString, type SerializedCanvasState } from "@/lib/ai-chat/canvas-state-serializer"
+import type { CanvasElement, SmartConnection } from "@/lib/types"
 
 export const maxDuration = 60
 
@@ -60,14 +62,22 @@ function transformMessagesForV6(messages: UIMessage[]): UIMessage[] {
 function getSystemPrompt(
   theme: string,
   canvasInfo: { centerX: number; centerY: number; width: number; height: number },
+  canvasStateContext?: string,
 ) {
+  // Canvas state section - either injected state or instruction to call getCanvasState
+  const canvasStateSection = canvasStateContext 
+    ? `# ${canvasStateContext}`
+    : `# CANVAS STATE (Unknown - call getCanvasState first)`
+
   return `# ROLE & MISSION
 You are an expert diagram visualization assistant embedded in an interactive whiteboard. Your mission: translate user intent into precise, connected, visually compelling diagrams—completely and accurately on the first attempt.
 
-# CANVAS STATE
+# CANVAS INFO
 - Center: (${canvasInfo.centerX}, ${canvasInfo.centerY})
 - Dimensions: ${canvasInfo.width}×${canvasInfo.height}
 - Theme: ${theme}
+
+${canvasStateSection}
 
 # TOOL REGISTRY
 
@@ -204,10 +214,14 @@ When user uploads an image to recreate:
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { messages, canvasInfo, theme } = body as {
+    const { messages, canvasInfo, theme, elements, connections } = body as {
       messages: UIMessage[]
       canvasInfo?: { centerX: number; centerY: number; width: number; height: number }
       theme?: string
+      /** Current canvas elements - for agent context */
+      elements?: CanvasElement[]
+      /** Current canvas connections - for agent context */
+      connections?: SmartConnection[]
     }
 
     const selectedModelId = req.headers.get("x-selected-model") || "anthropic/claude-opus-4.5"
@@ -216,7 +230,13 @@ export async function POST(req: Request) {
     const canvas = canvasInfo || { centerX: 400, centerY: 300, width: 800, height: 600 }
     const currentTheme = theme || "dark"
 
-    console.log("[ai-chat] Request - model:", selectedModelId, "messages:", messages.length)
+    // Create canvas state context string for the system prompt
+    // This ensures the agent always knows what's on the canvas, even in new conversations
+    const canvasStateContext = elements && connections
+      ? createCanvasContextString(elements, connections)
+      : undefined
+
+    console.log("[ai-chat] Request - model:", selectedModelId, "messages:", messages.length, "elements:", elements?.length ?? 0)
 
     // Transform messages to handle v5->v6 format differences (file->image parts)
     const transformedMessages = transformMessagesForV6(messages)
@@ -226,7 +246,7 @@ export async function POST(req: Request) {
 
     const result = streamText({
       model,
-      system: getSystemPrompt(currentTheme, canvas),
+      system: getSystemPrompt(currentTheme, canvas, canvasStateContext),
       messages: convertToModelMessages(transformedMessages),
       tools: allTools,
       // Multi-step reasoning is handled client-side via sendAutomaticallyWhen
