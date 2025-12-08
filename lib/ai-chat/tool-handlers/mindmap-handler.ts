@@ -1,7 +1,8 @@
 import type { ToolHandlerContext } from "../types"
 import { generateId } from "../canvas-helpers"
-import { createTextElement, createShapeElement, createLineElement } from "../element-creators"
+import { createShapeElement } from "../element-creators"
 import { getStrokeColors, getBackgroundColors } from "@/lib/constants"
+import type { HandlePosition } from "@/lib/types"
 
 interface MindMapBranch {
   id: string
@@ -207,31 +208,52 @@ export function handleCreateMindMap(
     })
   }
 
-  // Create connections
+  // Create connections using SmartConnections for proper routing
   for (const conn of connections) {
+    const fromElementId = nodeElementIds.get(conn.fromId)
+    const toElementId = nodeElementIds.get(conn.toId)
     const fromNode = positionedNodes.find(n => n.id === conn.fromId)
     const toNode = positionedNodes.find(n => n.id === conn.toId)
     
-    if (!fromNode || !toNode) {
+    if (!fromElementId || !toElementId || !fromNode || !toNode) {
       console.warn(`[mindmap] Invalid connection: ${conn.fromId} -> ${conn.toId}`)
       continue
     }
 
+    // Calculate optimal handle positions based on radial layout
     const fromCenterX = fromNode.x + fromNode.width / 2
     const fromCenterY = fromNode.y + fromNode.height / 2
     const toCenterX = toNode.x + toNode.width / 2
     const toCenterY = toNode.y + toNode.height / 2
+    
+    const dx = toCenterX - fromCenterX
+    const dy = toCenterY - fromCenterY
+    
+    let sourceHandle: HandlePosition
+    let targetHandle: HandlePosition
+    
+    // For radial layout, determine handles based on relative positions
+    if (Math.abs(dx) > Math.abs(dy)) {
+      // More horizontal
+      sourceHandle = dx > 0 ? "right" : "left"
+      targetHandle = dx > 0 ? "left" : "right"
+    } else {
+      // More vertical
+      sourceHandle = dy > 0 ? "bottom" : "top"
+      targetHandle = dy > 0 ? "top" : "bottom"
+    }
 
-    ctx.addElementMutation(
-      createLineElement(
-        fromCenterX,
-        fromCenterY,
-        toCenterX,
-        toCenterY,
-        customStroke || (isDark ? strokeColors[0] : strokeColors[1]),
-        2,
-      ),
-    )
+    ctx.addConnectionMutation({
+      sourceId: fromElementId,
+      targetId: toElementId,
+      sourceHandle,
+      targetHandle,
+      strokeColor: customStroke || (isDark ? strokeColors[0] : strokeColors[1]),
+      strokeWidth: 2,
+      strokeStyle: "solid",
+      arrowHeadEnd: "none", // Mind maps typically don't have arrows
+      pathType: "bezier", // Curved lines look better for radial layouts
+    })
   }
 
   return {

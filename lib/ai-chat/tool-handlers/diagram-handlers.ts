@@ -1,7 +1,8 @@
 import type { ToolHandlerContext } from "../types"
 import { getForegroundColor, generateId } from "../canvas-helpers"
-import { createLineElement, createTextElement, createShapeElement, createArrowElement } from "../element-creators"
+import { createTextElement, createShapeElement, createLineElement } from "../element-creators"
 import { getStrokeColors, getBackgroundColors } from "@/lib/constants"
+import type { HandlePosition } from "@/lib/types"
 import {
   type Node,
   type Edge,
@@ -45,6 +46,7 @@ interface EntityInput {
   id: string
   name: string
   attributes: EntityAttributeInput[]
+  type?: "entity" | "weak-entity" | "associative"
 }
 
 export interface CreateERDiagramInput {
@@ -79,7 +81,28 @@ export function handleCreateERDiagram(
   const customText = args.colorScheme?.textColor
   const foregroundColor = customText || getForegroundColor(ctx.resolvedTheme)
 
-  const layoutResult = erDiagramLayout(args.entities)
+  // Convert EntityInput[] to EREntity[] for layout calculation
+  // The layout function only needs id, name, and attribute count
+  const layoutEntities: EREntity[] = args.entities.map((entity) => {
+    // Find primary key from attributes
+    const pkAttr = entity.attributes.find((attr) => {
+      return typeof attr !== "string" && attr.isPrimaryKey
+    })
+    const primaryKey = pkAttr && typeof pkAttr !== "string" ? pkAttr.name : undefined
+
+    return {
+      id: entity.id,
+      name: entity.name,
+      // Convert attribute objects to strings for layout calculation
+      attributes: entity.attributes.map((attr) => {
+        return typeof attr === "string" ? attr : `${attr.name}: ${attr.type}`
+      }),
+      primaryKey,
+      type: entity.type,
+    }
+  })
+
+  const layoutResult = erDiagramLayout(layoutEntities)
   const createdEntityIds = new Map<string, string>()
 
   // Create entity rectangles with attributes
@@ -166,11 +189,17 @@ export function handleCreateERDiagram(
     }
   }
 
-  // Create relationships
+  // Create relationships using SmartConnections
   for (const rel of args.relationships) {
     const fromPos = layoutResult.entities.get(rel.from)
     const toPos = layoutResult.entities.get(rel.to)
-    if (!fromPos || !toPos) continue
+    const fromElementId = createdEntityIds.get(rel.from)
+    const toElementId = createdEntityIds.get(rel.to)
+    
+    if (!fromPos || !toPos || !fromElementId || !toElementId) {
+      console.warn(`[ER] Invalid relationship: ${rel.from} -> ${rel.to}`)
+      continue
+    }
 
     const fromCenterX = fromPos.x + fromPos.width / 2
     const fromCenterY = fromPos.y + fromPos.height / 2
@@ -179,11 +208,11 @@ export function handleCreateERDiagram(
 
     const relType = rel.type || "association"
     let strokeColor = customStroke || foregroundColor
-    let endArrow = false
+    let arrowHeadEnd: "arrow" | "dot" | "bar" | "none" = "none"
 
     if (!customStroke) {
       if (relType === "inheritance") {
-        endArrow = true
+        arrowHeadEnd = "arrow"
         strokeColor = strokeColors[6]
       } else if (relType === "composition") {
         strokeColor = strokeColors[3]
@@ -192,28 +221,39 @@ export function handleCreateERDiagram(
       }
     }
 
-    ctx.addElementMutation(
-      createLineElement(fromCenterX, fromCenterY, toCenterX, toCenterY, strokeColor, 2, { endArrow }),
-    )
+    // Calculate handle positions based on relative entity positions
+    const dx = toCenterX - fromCenterX
+    const dy = toCenterY - fromCenterY
+    let sourceHandle: HandlePosition
+    let targetHandle: HandlePosition
+    
+    if (Math.abs(dx) > Math.abs(dy)) {
+      sourceHandle = dx > 0 ? "right" : "left"
+      targetHandle = dx > 0 ? "left" : "right"
+    } else {
+      sourceHandle = dy > 0 ? "bottom" : "top"
+      targetHandle = dy > 0 ? "top" : "bottom"
+    }
 
-    // Add relationship label
-    const midX = (fromCenterX + toCenterX) / 2
-    const midY = (fromCenterY + toCenterY) / 2
+    // Create SmartConnection with label
+    ctx.addConnectionMutation({
+      sourceId: fromElementId,
+      targetId: toElementId,
+      sourceHandle,
+      targetHandle,
+      label: rel.label,
+      strokeColor,
+      strokeWidth: 2,
+      strokeStyle: "solid",
+      arrowHeadEnd,
+      pathType: "smoothstep",
+    })
 
-    ctx.addElementMutation(
-      createTextElement(midX - 40, midY - 25, 80, 18, rel.label, {
-        strokeColor,
-        backgroundColor: customBg || (isDark ? bgColors[1] : bgColors[0]),
-        textAlign: "center",
-        fontSize: "small",
-        opacity: 0.95,
-      }),
-    )
-
-    // Add cardinality symbols
+    // Add cardinality symbols as text elements near the entities
     const fromCardSymbol = getCardinalitySymbol(rel.fromCardinality)
     const toCardSymbol = getCardinalitySymbol(rel.toCardinality)
 
+    // Position cardinality near source entity
     ctx.addElementMutation(
       createTextElement(
         fromCenterX + (toCenterX - fromCenterX) * 0.15 - 15,
@@ -231,6 +271,7 @@ export function handleCreateERDiagram(
       ),
     )
 
+    // Position cardinality near target entity
     ctx.addElementMutation(
       createTextElement(
         fromCenterX + (toCenterX - fromCenterX) * 0.85 - 15,
@@ -379,39 +420,55 @@ export function handleCreateNetworkDiagram(
     )
   }
 
-  // Create connections
+  // Create connections using SmartConnections
   for (const link of args.links) {
     const fromPos = layoutResult.nodes.get(link.from)
     const toPos = layoutResult.nodes.get(link.to)
-    if (!fromPos || !toPos) continue
+    const fromElementId = createdNodeIds.get(link.from)
+    const toElementId = createdNodeIds.get(link.to)
+    
+    if (!fromPos || !toPos || !fromElementId || !toElementId) {
+      console.warn(`[network] Invalid link: ${link.from} -> ${link.to}`)
+      continue
+    }
 
     const fromCenterX = fromPos.x + fromPos.width / 2
     const fromCenterY = fromPos.y + fromPos.height / 2
     const toCenterX = toPos.x + toPos.width / 2
     const toCenterY = toPos.y + toPos.height / 2
 
-    ctx.addElementMutation(
-      createLineElement(fromCenterX, fromCenterY, toCenterX, toCenterY, customStroke || foregroundColor),
-    )
-
-    if (link.label || link.bandwidth) {
-      const midX = (fromCenterX + toCenterX) / 2
-      const midY = (fromCenterY + toCenterY) / 2
-      const labelText = [link.label, link.bandwidth].filter(Boolean).join(" ")
-
-      ctx.addElementMutation(
-        createTextElement(midX - 40, midY - 15, 80, 20, labelText, {
-          strokeColor: customStroke || strokeColors[12],
-          backgroundColor: customBg || (isDark ? bgColors[1] : bgColors[0]),
-          textAlign: "center",
-          fontSize: "small",
-          opacity: 0.9,
-        }),
-      )
+    // Calculate handle positions based on relative node positions
+    const dx = toCenterX - fromCenterX
+    const dy = toCenterY - fromCenterY
+    let sourceHandle: HandlePosition
+    let targetHandle: HandlePosition
+    
+    if (Math.abs(dx) > Math.abs(dy)) {
+      sourceHandle = dx > 0 ? "right" : "left"
+      targetHandle = dx > 0 ? "left" : "right"
+    } else {
+      sourceHandle = dy > 0 ? "bottom" : "top"
+      targetHandle = dy > 0 ? "top" : "bottom"
     }
+
+    // Combine label and bandwidth for connection label
+    const labelText = [link.label, link.bandwidth].filter(Boolean).join(" ") || undefined
+
+    ctx.addConnectionMutation({
+      sourceId: fromElementId,
+      targetId: toElementId,
+      sourceHandle,
+      targetHandle,
+      label: labelText,
+      strokeColor: customStroke || foregroundColor,
+      strokeWidth: 2,
+      strokeStyle: "solid",
+      arrowHeadEnd: "none", // Network diagrams typically show bidirectional connections
+      pathType: "straight", // Straight lines for network diagrams
+    })
   }
 
-  // Bus topology backbone
+  // Bus topology backbone - keep as line element since it's not connecting nodes
   if (args.topology === "bus") {
     ctx.addElementMutation(createLineElement(200, 400, 1800, 400, customStroke || strokeColors[7]))
   }
@@ -519,22 +576,49 @@ export function handleCreateDiagram(
     })
   }
 
-  // Create edges
+  // Create edges using SmartConnections
   for (const edge of args.edges) {
-    const fromPos = layoutResult.nodes.get(edge.from)!
-    const toPos = layoutResult.nodes.get(edge.to)!
+    const fromPos = layoutResult.nodes.get(edge.from)
+    const toPos = layoutResult.nodes.get(edge.to)
+    const fromElementId = nodeElementIds.get(edge.from)
+    const toElementId = nodeElementIds.get(edge.to)
+    
+    if (!fromPos || !toPos || !fromElementId || !toElementId) {
+      console.warn(`[diagram] Invalid edge: ${edge.from} -> ${edge.to}`)
+      continue
+    }
 
     const fromCenterX = fromPos.x + fromPos.width / 2
     const fromCenterY = fromPos.y + fromPos.height / 2
     const toCenterX = toPos.x + toPos.width / 2
     const toCenterY = toPos.y + toPos.height / 2
 
-    ctx.addElementMutation(
-      createArrowElement(fromCenterX, fromCenterY, toCenterX, toCenterY, {
-        strokeColor: customStroke || strokeColors[0],
-        endArrow: edge.type === "arrow" || edge.type === undefined,
-      }),
-    )
+    // Calculate handle positions based on relative positions
+    const dx = toCenterX - fromCenterX
+    const dy = toCenterY - fromCenterY
+    let sourceHandle: HandlePosition
+    let targetHandle: HandlePosition
+    
+    if (Math.abs(dx) > Math.abs(dy)) {
+      sourceHandle = dx > 0 ? "right" : "left"
+      targetHandle = dx > 0 ? "left" : "right"
+    } else {
+      sourceHandle = dy > 0 ? "bottom" : "top"
+      targetHandle = dy > 0 ? "top" : "bottom"
+    }
+
+    ctx.addConnectionMutation({
+      sourceId: fromElementId,
+      targetId: toElementId,
+      sourceHandle,
+      targetHandle,
+      label: edge.label,
+      strokeColor: customStroke || strokeColors[0],
+      strokeWidth: 2,
+      strokeStyle: "solid",
+      arrowHeadEnd: edge.type === "arrow" || edge.type === undefined ? "arrow" : "none",
+      pathType: "smoothstep",
+    })
   }
 
   return {

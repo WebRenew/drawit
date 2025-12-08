@@ -1,8 +1,9 @@
 import type { ToolHandlerContext } from "../types"
 import { getForegroundColor, generateId } from "../canvas-helpers"
-import { createLineElement, createTextElement, createShapeElement } from "../element-creators"
+import { createShapeElement, createTextElement } from "../element-creators"
 import { getStrokeColors, getBackgroundColors } from "@/lib/constants"
 import { orgChartLayout } from "@/lib/org-chart-layouts"
+import type { HandlePosition } from "@/lib/types"
 
 export interface OrgChartNode {
   id: string
@@ -133,19 +134,38 @@ export function handleCreateOrgChart(
     }
   }
 
-  // Create orthogonal connector lines
+  // Create SmartConnections for proper routing
+  // We need to map from layout node IDs to element IDs
   for (const conn of layoutResult.connections) {
-    const points = conn.points
-
-    if (points.length < 2) continue
-
-    // Draw orthogonal path as multiple line segments
-    for (let i = 0; i < points.length - 1; i++) {
-      const start = points[i]
-      const end = points[i + 1]
-
-      ctx.addElementMutation(createLineElement(start.x, start.y, end.x, end.y, customStroke || foregroundColor))
+    const sourceElementId = createdNodeIds.get(conn.from)
+    const targetElementId = createdNodeIds.get(conn.to)
+    
+    if (!sourceElementId || !targetElementId) {
+      console.warn(`[orgchart] Invalid connection: ${conn.from} -> ${conn.to} (node not found)`)
+      continue
     }
+    
+    // For org charts, connections typically flow from parent (bottom) to child (top)
+    // Determine handles based on orientation
+    let sourceHandle: HandlePosition = "bottom"
+    let targetHandle: HandlePosition = "top"
+    
+    if (args.orientation === "horizontal") {
+      sourceHandle = "right"
+      targetHandle = "left"
+    }
+    
+    ctx.addConnectionMutation({
+      sourceId: sourceElementId,
+      targetId: targetElementId,
+      sourceHandle,
+      targetHandle,
+      strokeColor: customStroke || foregroundColor,
+      strokeWidth: 2,
+      strokeStyle: "solid",
+      arrowHeadEnd: "none", // Org charts don't typically have arrows
+      pathType: "smoothstep", // Orthogonal routing for clean hierarchy lines
+    })
   }
 
   return {
