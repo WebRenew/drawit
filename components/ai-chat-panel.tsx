@@ -10,7 +10,7 @@ import { useState, useRef, useEffect, useMemo, useCallback } from "react"
 import { useChat } from "@ai-sdk/react"
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from "ai"
 import { useCanvasStore } from "@/lib/store"
-import { MessageSquare, X, Trash2, Cloud, CloudOff, Loader2 } from "lucide-react"
+import { MessageSquare, X, Trash2, Cloud, CloudOff, Loader2, LogIn, Sparkles } from "lucide-react"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -576,6 +576,8 @@ export function AIChatPanel({ onPreviewChange, canvasDimensions, onElementsCreat
     }
   }, [isMobile])
 
+  const { signInWithGoogle } = useAuth()
+
   if (!isOpen) {
     return (
       <button
@@ -585,6 +587,49 @@ export function AIChatPanel({ onPreviewChange, canvasDimensions, onElementsCreat
       >
         <MessageSquare className="h-6 w-6" />
       </button>
+    )
+  }
+
+  // Show sign-in prompt for unauthenticated users
+  if (!user) {
+    return (
+      <div
+        ref={chatContainerRef}
+        className={cn(
+          "fixed z-50 flex flex-col bg-background border border-border shadow-xl",
+          isMobile ? "left-0 right-0 top-0" : "bottom-4 right-4 w-96 h-[600px] max-h-[80vh] rounded-lg",
+        )}
+        style={isMobile ? { height: "var(--app-height, 100dvh)", maxHeight: "var(--app-height, 100dvh)" } : undefined}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-3 border-b border-border flex-shrink-0">
+          <h2 className="font-semibold text-foreground">AI Diagram Assistant</h2>
+          <button onClick={togglePanel} className="p-1.5 rounded hover:bg-muted text-muted-foreground" title="Close">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Sign-in prompt */}
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+            <Sparkles className="w-8 h-8 text-primary" />
+          </div>
+          <h3 className="text-lg font-semibold mb-2">Sign in to use AI</h3>
+          <p className="text-sm text-muted-foreground mb-6 max-w-[250px]">
+            Create diagrams, flowcharts, and more with AI assistance. Sign in to get started.
+          </p>
+          <button
+            onClick={signInWithGoogle}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium"
+          >
+            <LogIn className="w-4 h-4" />
+            Sign in with Google
+          </button>
+          <p className="text-xs text-muted-foreground mt-4">
+            Free to use • No credit card required
+          </p>
+        </div>
+      </div>
     )
   }
 
@@ -602,33 +647,29 @@ export function AIChatPanel({ onPreviewChange, canvasDimensions, onElementsCreat
         <div className="flex items-center gap-2">
           <h2 className="font-semibold text-foreground">AI Diagram Assistant</h2>
           {/* Cloud sync indicator */}
-          {user && (
-            <div className="flex items-center" title={
-              cloudError ? cloudError : 
-              isSavingToCloud ? "Saving..." : 
-              lastSavedToCloud ? `Saved ${lastSavedToCloud.toLocaleTimeString()}` : 
-              "Not saved yet"
-            }>
-              {isSavingToCloud ? (
-                <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-              ) : cloudError ? (
-                <CloudOff className="h-3 w-3 text-destructive" />
-              ) : lastSavedToCloud ? (
-                <Cloud className="h-3 w-3 text-green-500" />
-              ) : (
-                <CloudOff className="h-3 w-3 text-muted-foreground" />
-              )}
-            </div>
-          )}
+          <div className="flex items-center" title={
+            cloudError ? cloudError : 
+            isSavingToCloud ? "Saving..." : 
+            lastSavedToCloud ? `Saved ${lastSavedToCloud.toLocaleTimeString()}` : 
+            "Not saved yet"
+          }>
+            {isSavingToCloud ? (
+              <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+            ) : cloudError ? (
+              <CloudOff className="h-3 w-3 text-destructive" />
+            ) : lastSavedToCloud ? (
+              <Cloud className="h-3 w-3 text-green-500" />
+            ) : (
+              <CloudOff className="h-3 w-3 text-muted-foreground" />
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-1">
-          {user && (
-            <ChatHistorySheet
-              currentSessionId={chatSession?.id}
-              onSelectSession={handleSelectSession}
-              onNewChat={handleNewChat}
-            />
-          )}
+          <ChatHistorySheet
+            currentSessionId={chatSession?.id}
+            onSelectSession={handleSelectSession}
+            onNewChat={handleNewChat}
+          />
           <button
             onClick={handleClearChat}
             className="p-1.5 rounded hover:bg-muted text-muted-foreground"
