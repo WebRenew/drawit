@@ -26,3 +26,6 @@ export async function createServerSupabaseClient() {
   )
 }
 
+// Alias for cleaner imports
+export { createServerSupabaseClient as createClient }
+

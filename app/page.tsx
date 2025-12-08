@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Canvas } from "@/components/editor/canvas"
 import { DrawingRoomProvider } from "@/components/room-provider"
 import { AIChatPanel } from "@/components/ai-chat-panel"
+import { AIQuickCreate } from "@/components/ai-quick-create"
 import type { PreviewState } from "@/lib/types"
 
 export default function EditorPage() {
@@ -14,6 +15,7 @@ export default function EditorPage() {
       <DrawingRoomProvider>
         <Canvas previewElements={previewState} />
         <AIChatPanel onPreviewChange={setPreviewState} />
+        <AIQuickCreate />
       </DrawingRoomProvider>
     </main>
   )

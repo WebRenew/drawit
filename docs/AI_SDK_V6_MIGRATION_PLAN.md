@@ -1016,12 +1016,34 @@ AI_GATEWAY_API_KEY=...
 | Remove localStorage fallback | Deferred | Keep for offline support |
 | AI SDK v6 server-side execution | Deferred | Client-side needed for canvas mutations |
 
-### Architecture Decision: Client-Side Tool Execution
+### Architecture Decision: Hybrid Tool Execution
 
-We chose to keep **client-side tool execution** instead of migrating to AI SDK v6's server-side execution because:
+We implemented a **hybrid approach** with two modes:
 
-1. **Canvas State Access**: Tools need direct access to Zustand store to create/update elements
-2. **Real-time Updates**: UI updates instantly when tools execute
-3. **Simpler Architecture**: No need to serialize/deserialize canvas state per request
+#### 1. Client-Side (Streaming Chat) - Default
+- Uses AI SDK v5 `useChat` with `sendAutomaticallyWhen`
+- Tools execute client-side via `onToolCall`
+- Real-time streaming responses
+- Best for: Interactive conversations, quick edits
 
-The `sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls` pattern handles multi-step reasoning client-side effectively.
+#### 2. Server-Side (Trigger.dev) - Quick Create
+- Uses Trigger.dev background tasks
+- Tools execute server-side with `generateText` + `execute`
+- Better reliability, longer timeouts (5 mins)
+- Best for: Complex diagrams, batch generation
+
+### Trigger.dev Integration
+
+Files created:
+- `src/trigger/ai-diagram.ts` - Background task with server-side tools
+- `app/api/ai-diagram/route.ts` - Trigger endpoint
+- `app/api/ai-diagram/[runId]/route.ts` - Polling endpoint
+- `hooks/use-ai-diagram.ts` - React hook for triggering/polling
+- `components/ai-quick-create.tsx` - Quick Create UI component
+
+The Quick Create button (bottom-left, wand icon) uses Trigger.dev for:
+- Flowchart templates
+- Network diagrams
+- Mind maps
+- Org charts
+- Custom prompts
