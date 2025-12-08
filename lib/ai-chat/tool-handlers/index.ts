@@ -52,3 +52,11 @@ export const handleCreateMolecule = _handleCreateMolecule
 // Re-export org chart handler
 import { handleCreateOrgChart as _handleCreateOrgChart } from "./org-chart-handler"
 export const handleCreateOrgChart = _handleCreateOrgChart
+
+// Re-export mindmap handler
+import { handleCreateMindMap as _handleCreateMindMap } from "./mindmap-handler"
+export const handleCreateMindMap = _handleCreateMindMap
+
+// Re-export workflow handler
+import { handleCreateWorkflow as _handleCreateWorkflow } from "./workflow-handler"
+export const handleCreateWorkflow = _handleCreateWorkflow

@@ -32,10 +32,25 @@ interface ColorScheme {
 
 // ===== ER Diagram Handler =====
 
+// Schema-compatible attribute format (what AI sends)
+interface EntityAttributeInput {
+  name: string
+  type: string
+  isPrimaryKey?: boolean
+  isForeignKey?: boolean
+}
+
+// Schema-compatible entity format (what AI sends)
+interface EntityInput {
+  id: string
+  name: string
+  attributes: EntityAttributeInput[]
+}
+
 export interface CreateERDiagramInput {
-  entities: EREntity[]
+  entities: EntityInput[]
   relationships: ERRelationship[]
-  colorScheme?: ColorScheme // Added colorScheme support
+  colorScheme?: ColorScheme
 }
 
 export function handleCreateERDiagram(
@@ -121,11 +136,24 @@ export function handleCreateERDiagram(
       ),
     )
 
-    // Add attributes
+    // Add attributes (handles both object format from schema and legacy string format)
     let attributeY = position.y + 50
     for (const attr of entity.attributes) {
-      const isPrimaryKey = entity.primaryKey === attr
-      const attrText = isPrimaryKey ? `🔑 ${attr}` : attr
+      // Support both new object format and legacy string format
+      let attrText: string
+      if (typeof attr === "string") {
+        // Legacy format: plain string, check entity.primaryKey
+        const legacyEntity = entity as unknown as EREntity
+        const isPrimaryKey = legacyEntity.primaryKey === attr
+        attrText = isPrimaryKey ? `🔑 ${attr}` : attr
+      } else {
+        // New object format from schema: { name, type, isPrimaryKey?, isForeignKey? }
+        const attrObj = attr as EntityAttributeInput
+        let prefix = ""
+        if (attrObj.isPrimaryKey) prefix = "🔑 "
+        else if (attrObj.isForeignKey) prefix = "🔗 "
+        attrText = `${prefix}${attrObj.name}: ${attrObj.type}`
+      }
 
       ctx.addElementMutation(
         createTextElement(position.x + 10, attributeY, position.width - 20, 18, attrText, {
@@ -528,7 +556,8 @@ export function handleAnalyzeDiagram(ctx: ToolHandlerContext): {
   suggestions?: string[]
   message: string
 } {
-  const currentElements = ctx.elements || []
+  // Issue #7 fix: Use getElements() for fresh state
+  const currentElements = ctx.getElements() || []
   const analysis = analyzeDiagram(currentElements)
 
   return {
@@ -551,7 +580,8 @@ export function handleBeautifyDiagram(ctx: ToolHandlerContext): {
   updatedCount: number
   message: string
 } {
-  const currentElements = ctx.elements || []
+  // Issue #7 fix: Use getElements() for fresh state
+  const currentElements = ctx.getElements() || []
   const updates = beautifyDiagram(currentElements)
 
   if (updates.length > 0) {

@@ -411,25 +411,25 @@ Consider adding confirmation step or snapshot for undo.
 
 ## Summary Action Items
 
-### Immediate Fixes (Critical)
-- [ ] Fix Org Chart schema/handler mismatch
-- [ ] Fix Mind Map schema/handler mismatch  
-- [ ] Fix ER Diagram attributes format
-- [ ] Create proper Workflow handler
+### Immediate Fixes (Critical) ✅ ALL COMPLETE
+- [x] Fix Org Chart schema/handler mismatch - Updated schema to use nested `hierarchy` format
+- [x] Fix Mind Map schema/handler mismatch - Created dedicated `handleCreateMindMap` handler
+- [x] Fix ER Diagram attributes format - Handler now supports object format with `name`, `type`, `isPrimaryKey`
+- [x] Create proper Workflow handler - Created dedicated `handleCreateWorkflow` with proper node types
 
-### Short-term Fixes (High)
-- [ ] Pass `uploadedImagesRef` to tool context
-- [ ] Add schema refinements for network topology requirements
-- [ ] Fix canvas state race condition
-- [ ] Map "circle" to "ellipse" in schemas
-- [ ] Register flowchart nodes in shape registry
+### Short-term Fixes (High) ✅ ALL COMPLETE
+- [x] Pass `uploadedImagesRef` to tool context - Added ref and sync in ai-chat-panel.tsx
+- [x] Add schema refinements for network topology requirements - Added Zod refinements for star/tree
+- [x] Fix canvas state race condition - Added `getElements()` getter function
+- [x] Map "circle" to "ellipse" in schemas - Updated createShapeSchema
+- [x] Register flowchart nodes in shape registry - Added shapeRegistryRef registration
 
-### Medium-term Improvements
-- [ ] Add connection validation warnings
-- [ ] Use actual canvas dimensions in layout calculations
-- [ ] Fix opacity scale normalization
-- [ ] Add better success messages
-- [ ] Consider undo for destructive operations
+### Medium-term Improvements ✅ MOST COMPLETE
+- [x] Add connection validation warnings - Added console.warn and response message for skipped connections
+- [x] Fix opacity scale normalization - Handler now converts 0-100 to 0-1
+- [ ] Use actual canvas dimensions in layout calculations (deferred - using canvasDimensions context)
+- [ ] Add better success messages (partially done)
+- [ ] Consider undo for destructive operations (deferred)
 
 ---
 

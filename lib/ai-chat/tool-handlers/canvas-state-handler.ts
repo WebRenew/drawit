@@ -33,10 +33,12 @@ export interface CanvasStateOutput {
 }
 
 export function handleGetCanvasState(ctx: ToolHandlerContext): CanvasStateOutput {
-  const canvasInfo = getCanvasInfo(ctx.canvasDimensions, ctx.elements)
+  // Issue #7 fix: Use getElements() for fresh state to avoid race conditions
+  const elements = ctx.getElements()
+  const canvasInfo = getCanvasInfo(ctx.canvasDimensions, elements)
 
   const elementSummary =
-    ctx.elements?.map((el) => ({
+    elements?.map((el) => ({
       id: el.id,
       type: el.type,
       x: el.x,
@@ -54,14 +56,14 @@ export function handleGetCanvasState(ctx: ToolHandlerContext): CanvasStateOutput
     maxX = Number.NEGATIVE_INFINITY,
     maxY = Number.NEGATIVE_INFINITY
 
-  for (const el of ctx.elements || []) {
+  for (const el of elements || []) {
     minX = Math.min(minX, el.x)
     minY = Math.min(minY, el.y)
     maxX = Math.max(maxX, el.x + (el.width || 0))
     maxY = Math.max(maxY, el.y + (el.height || 0))
   }
 
-  const hasElements = ctx.elements && ctx.elements.length > 0
+  const hasElements = elements && elements.length > 0
   const usedArea = hasElements ? { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY } : null
 
   const freeAreas: Array<{ description: string; x: number; y: number }> = []
@@ -82,12 +84,12 @@ export function handleGetCanvasState(ctx: ToolHandlerContext): CanvasStateOutput
 
   return {
     canvas: canvasInfo,
-    elementCount: ctx.elements?.length || 0,
+    elementCount: elements?.length || 0,
     elements: elementSummary,
     usedArea,
     freeAreas,
     recommendation: hasElements
-      ? `Canvas has ${ctx.elements!.length} elements. Consider placing new content at (${freeAreas[0]?.x || canvasInfo.centerX}, ${freeAreas[0]?.y || canvasInfo.centerY}).`
+      ? `Canvas has ${elements!.length} elements. Consider placing new content at (${freeAreas[0]?.x || canvasInfo.centerX}, ${freeAreas[0]?.y || canvasInfo.centerY}).`
       : `Canvas is empty. Place diagram centered at (${canvasInfo.centerX}, ${canvasInfo.centerY}).`,
   }
 }

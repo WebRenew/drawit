@@ -85,15 +85,26 @@ export const createMindMapSchema = z.object({
 // Org chart schemas
 // ============================================
 
-export const orgMemberSchema = z.object({
+// Recursive org node schema for nested hierarchy
+const baseOrgNodeSchema = z.object({
   id: z.string(),
   name: z.string(),
-  role: z.string(),
-  reportsTo: z.string().optional(),
+  title: z.string().optional().describe("Job title (e.g., 'CEO', 'VP Engineering')"),
+  department: z.string().optional(),
+})
+
+// Use z.lazy for recursive children
+export type OrgNodeInput = z.infer<typeof baseOrgNodeSchema> & {
+  children?: OrgNodeInput[]
+}
+
+export const orgNodeSchema: z.ZodType<OrgNodeInput> = baseOrgNodeSchema.extend({
+  children: z.lazy(() => z.array(orgNodeSchema)).optional().describe("Direct reports"),
 })
 
 export const createOrgChartSchema = z.object({
-  members: z.array(orgMemberSchema),
+  hierarchy: z.array(orgNodeSchema).describe("Top-level nodes (usually CEO or department heads)"),
+  orientation: z.enum(["vertical", "horizontal"]).optional().default("vertical"),
   colorScheme: colorSchemeSchema,
 })
 
@@ -149,9 +160,15 @@ export const createNetworkDiagramSchema = z.object({
   nodes: z.array(networkNodeSchema),
   links: z.array(networkLinkSchema).describe("Connections between nodes - REQUIRED for showing relationships"),
   topology: z.enum(["star", "ring", "mesh", "tree", "bus"]).describe("Layout topology for the diagram"),
-  centerNodeId: z.string().optional().describe("Required for star topology - the central node"),
-  rootNodeId: z.string().optional().describe("Required for tree topology - the root node"),
-})
+  centerNodeId: z.string().optional().describe("REQUIRED for 'star' topology - specify which node is the hub"),
+  rootNodeId: z.string().optional().describe("REQUIRED for 'tree' topology - specify the root/top node"),
+}).refine(
+  (data) => data.topology !== "star" || data.centerNodeId,
+  { message: "centerNodeId is required for star topology", path: ["centerNodeId"] }
+).refine(
+  (data) => data.topology !== "tree" || data.rootNodeId,
+  { message: "rootNodeId is required for tree topology", path: ["rootNodeId"] }
+)
 
 // ============================================
 // Molecule schema
@@ -167,7 +184,8 @@ export const createMoleculeSchema = z.object({
 // ============================================
 
 export const createShapeSchema = z.object({
-  type: z.enum(["rectangle", "circle", "diamond", "text", "arrow"]),
+  type: z.enum(["rectangle", "ellipse", "diamond", "text", "arrow", "line"])
+    .describe("Shape type. Use 'ellipse' for circles (set equal width/height)."),
   x: z.number(),
   y: z.number(),
   width: z.number().optional(),
@@ -213,7 +231,7 @@ export const updateStylesSchema = z.object({
     backgroundColor: colorSchema.describe("Fill color for shapes"),
     labelColor: colorSchema.describe("Text/label color"),
     strokeWidth: z.number().optional().describe("Border width in pixels"),
-    opacity: z.number().optional().describe("Opacity from 0 to 100"),
+    opacity: z.number().optional().describe("Opacity percentage (0-100). E.g., 50 = 50% opacity, 100 = fully opaque"),
   }),
 })
 

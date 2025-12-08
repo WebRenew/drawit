@@ -156,6 +156,8 @@ export function handleCreateFlowchart(
 
     ctx.addElementMutation(shapeElement)
 
+    // Register in BOTH registries for future updates (Issue #9 fix)
+    ctx.shapeRegistryRef.current.set(node.id, elementId)
     ctx.shapeDataRef.current.set(node.id, {
       x: node.x,
       y: node.y,
@@ -165,11 +167,22 @@ export function handleCreateFlowchart(
     })
   }
 
+  // Track skipped connections for error reporting
+  const skippedConnections: string[] = []
+
   for (const edge of layout.edges) {
     const sourceElementId = nodeElementIds.get(edge.from)
     const targetElementId = nodeElementIds.get(edge.to)
 
-    if (!sourceElementId || !targetElementId) continue
+    if (!sourceElementId || !targetElementId) {
+      // Issue #10 fix: Add warning instead of silent skip
+      const missingSource = !sourceElementId ? `'${edge.from}'` : null
+      const missingTarget = !targetElementId ? `'${edge.to}'` : null
+      const missing = [missingSource, missingTarget].filter(Boolean).join(" and ")
+      console.warn(`[flowchart] Skipped connection ${edge.from} -> ${edge.to}: node ${missing} not found`)
+      skippedConnections.push(`${edge.from} -> ${edge.to}`)
+      continue
+    }
 
     // Determine handle positions based on edge direction
     let sourceHandle: HandlePosition = "bottom"
@@ -207,12 +220,20 @@ export function handleCreateFlowchart(
     })
   }
 
+  const successfulConnections = layout.edges.length - skippedConnections.length
+  let message = `Created flowchart with ${layout.nodes.length} nodes and ${successfulConnections} connections`
+  
+  // Warn about skipped connections in the response
+  if (skippedConnections.length > 0) {
+    message += `. Warning: ${skippedConnections.length} connection(s) skipped due to invalid node IDs.`
+  }
+
   return {
     success: true,
-    message: `Created flowchart with ${layout.nodes.length} nodes and ${layout.edges.length} connections`,
+    message,
     direction: args.direction || "vertical",
     nodeCount: layout.nodes.length,
-    connectionCount: layout.edges.length,
+    connectionCount: successfulConnections,
     swimlaneCount: layout.swimlanes?.length || 0,
     nodeIds: Object.fromEntries(nodeElementIds),
   }

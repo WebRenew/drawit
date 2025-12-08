@@ -53,6 +53,8 @@ import {
   handleBeautifyDiagram,
   handlePreviewDiagram,
   handleUpdateStyles,
+  handleCreateMindMap,
+  handleCreateWorkflow,
 } from "@/lib/ai-chat/tool-handlers"
 
 async function fileToBase64(file: File): Promise<string> {
@@ -137,6 +139,12 @@ export function AIChatPanel({ onPreviewChange, canvasDimensions, onElementsCreat
     elementsRef.current = elements
   }, [elements])
 
+  // Track uploaded images for placeImage tool
+  const uploadedImagesRef = useRef<string[]>([])
+  useEffect(() => {
+    uploadedImagesRef.current = uploadedImages.map(img => img.url)
+  }, [uploadedImages])
+
   const addElementMutation = useCallback(
     (element: Omit<CanvasElement, "id"> | CanvasElement) => {
       const elementWithId: CanvasElement = {
@@ -166,6 +174,7 @@ export function AIChatPanel({ onPreviewChange, canvasDimensions, onElementsCreat
       resolvedTheme,
       shapeRegistryRef,
       shapeDataRef,
+      uploadedImagesRef, // For placeImage tool
       addElementMutation,
       addConnectionMutation,
       updateElements: (updates: Partial<CanvasElement>[]) => {
@@ -184,7 +193,10 @@ export function AIChatPanel({ onPreviewChange, canvasDimensions, onElementsCreat
         shapeRegistryRef.current.clear()
         shapeDataRef.current.clear()
       },
-      elements: elementsRef.current, // Use ref for fresh elements
+      // @deprecated - use getElements() for fresh state
+      elements: elementsRef.current,
+      // Issue #7 fix: Use getter to avoid race condition during rapid tool calls
+      getElements: () => useCanvasStore.getState().elements,
       canvasDimensions,
     }),
     [resolvedTheme, addElementMutation, addConnectionMutation, updateElements, clearAll, canvasDimensions],
@@ -222,10 +234,10 @@ export function AIChatPanel({ onPreviewChange, canvasDimensions, onElementsCreat
             result = handleCreateFlowchart(args, toolContext)
             break
           case "createWorkflow":
-            result = handleCreateFlowchart(args, toolContext)
+            result = handleCreateWorkflow(args, toolContext)
             break
           case "createMindMap":
-            result = handleCreateDiagram(args, toolContext)
+            result = handleCreateMindMap(args, toolContext)
             break
           case "createOrgChart":
             result = handleCreateOrgChart(args, toolContext)

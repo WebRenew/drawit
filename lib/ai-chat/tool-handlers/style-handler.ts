@@ -24,7 +24,8 @@ export function handleUpdateStyles(
     }
   }
 
-  const elements = ctx.elements
+  // Issue #7 fix: Use getElements() for fresh state to avoid race conditions
+  const elements = ctx.getElements()
   if (!elements || elements.length === 0) {
     return {
       success: false,
@@ -112,7 +113,9 @@ export function handleUpdateStyles(
       update.strokeWidth = args.styles.strokeWidth
     }
     if (args.styles.opacity !== undefined) {
-      update.opacity = args.styles.opacity
+      // Issue #12 fix: Normalize opacity from 0-100 scale to 0-1 scale
+      // If value > 1, assume it's in 0-100 format and convert
+      update.opacity = args.styles.opacity > 1 ? args.styles.opacity / 100 : args.styles.opacity
     }
 
     return update

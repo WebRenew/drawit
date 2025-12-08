@@ -36,7 +36,10 @@ export interface ToolHandlerContext {
   addConnectionMutation: (connection: Omit<SmartConnection, "id">) => void
   updateElements: (updates: Partial<CanvasElement>[]) => void
   clearCanvas: () => void
+  /** @deprecated Use getElements() for fresh state. This may be stale during rapid tool calls. */
   elements: CanvasElement[] | undefined
+  /** Get fresh elements directly from store (avoids race condition during rapid tool calls) */
+  getElements: () => CanvasElement[]
   canvasDimensions?: { width: number; height: number }
 }
 
