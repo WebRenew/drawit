@@ -93,7 +93,7 @@ export async function POST(req: Request) {
         }),
 
         createFlowchart: tool({
-          description: "Create a flowchart with connected nodes. Use for processes, workflows, decision trees.",
+          description: "Create a flowchart with connected nodes. Supports per-node colors for visual distinction.",
           inputSchema: z.object({
             steps: z.array(
               z.object({
@@ -101,6 +101,8 @@ export async function POST(req: Request) {
                 type: z.enum(["start", "end", "process", "decision", "data", "document"]),
                 label: z.string(),
                 swimlane: z.string().optional(),
+                strokeColor: z.string().optional().describe("Border color for this specific node (hex, named, or rgb)"),
+                backgroundColor: z.string().optional().describe("Fill color for this specific node"),
               }),
             ),
             connections: z.array(
@@ -112,14 +114,6 @@ export async function POST(req: Request) {
             ),
             direction: z.enum(["vertical", "horizontal"]).optional(),
             swimlanes: z.array(z.string()).optional(),
-            colorScheme: z
-              .object({
-                strokeColor: z.string().optional().describe("Border/outline color for all nodes"),
-                backgroundColor: z.string().optional().describe("Fill color for all nodes"),
-                textColor: z.string().optional().describe("Text color for labels"),
-              })
-              .optional()
-              .describe("Custom colors to use for the flowchart. Use when user specifies colors."),
           }),
           outputSchema: toolOutputSchema,
         }),
@@ -238,13 +232,15 @@ export async function POST(req: Request) {
         }),
 
         createNetworkDiagram: tool({
-          description: "Create a network infrastructure diagram.",
+          description: "Create a network infrastructure diagram. Supports per-node colors for visual distinction.",
           inputSchema: z.object({
             nodes: z.array(
               z.object({
                 id: z.string(),
                 type: z.enum(["server", "database", "client", "router", "firewall", "cloud", "service"]),
                 label: z.string(),
+                strokeColor: z.string().optional().describe("Border color for this specific node (hex, named, or rgb)"),
+                backgroundColor: z.string().optional().describe("Fill color for this specific node"),
               }),
             ),
             connections: z.array(
@@ -255,14 +251,6 @@ export async function POST(req: Request) {
               }),
             ),
             layout: z.enum(["tree", "circular", "grid", "force"]).optional(),
-            colorScheme: z
-              .object({
-                strokeColor: z.string().optional(),
-                backgroundColor: z.string().optional(),
-                textColor: z.string().optional(),
-              })
-              .optional()
-              .describe("Custom colors to use for the network diagram."),
           }),
           outputSchema: toolOutputSchema,
         }),

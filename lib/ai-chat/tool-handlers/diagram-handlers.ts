@@ -232,13 +232,18 @@ export function handleCreateERDiagram(
 
 // ===== Network Diagram Handler =====
 
+export interface NetworkNodeWithColor extends NetworkNode {
+  strokeColor?: string
+  backgroundColor?: string
+}
+
 export interface CreateNetworkDiagramInput {
-  nodes: NetworkNode[]
+  nodes: NetworkNodeWithColor[]
   links: NetworkLink[]
   topology: "star" | "mesh" | "tree" | "ring" | "bus"
   centerNodeId?: string
   rootNodeId?: string
-  colorScheme?: ColorScheme // Added colorScheme support
+  colorScheme?: ColorScheme // Fallback colorScheme for all nodes
 }
 
 export function handleCreateNetworkDiagram(
@@ -315,10 +320,14 @@ export function handleCreateNetworkDiagram(
     const elementId = generateId()
     const nodeStyle = getNodeStyleForType(node.type, ctx.resolvedTheme as "light" | "dark")
 
+    // Per-node colors take priority, then global colorScheme, then defaults
+    const nodeStrokeColor = node.strokeColor || customStroke || nodeStyle.strokeColor
+    const nodeBgColor = node.backgroundColor || customBg || nodeStyle.backgroundColor
+
     ctx.addElementMutation(
       createShapeElement(nodeStyle.shape, position.x, position.y, position.width, position.height, {
-        strokeColor: customStroke || nodeStyle.strokeColor,
-        backgroundColor: customBg || nodeStyle.backgroundColor,
+        strokeColor: nodeStrokeColor,
+        backgroundColor: nodeBgColor,
       }),
     )
     createdNodeIds.set(node.id, elementId)

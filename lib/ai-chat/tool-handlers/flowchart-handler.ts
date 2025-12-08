@@ -5,8 +5,13 @@ import { getStrokeColors, getBackgroundColors } from "@/lib/constants"
 import { calculateFlowchartLayout, type FlowchartStep, type FlowchartConnection } from "@/lib/flowchart-layouts"
 import type { HandlePosition } from "@/lib/types"
 
+export interface FlowchartStepWithColor extends FlowchartStep {
+  strokeColor?: string
+  backgroundColor?: string
+}
+
 export interface CreateFlowchartInput {
-  steps: FlowchartStep[]
+  steps: FlowchartStepWithColor[]
   connections: FlowchartConnection[]
   direction?: "vertical" | "horizontal"
   spacing?: number
@@ -101,6 +106,14 @@ export function handleCreateFlowchart(
           document: { stroke: strokeColors[6], bg: bgColors[7] },
         }
 
+  // Create a map of step colors for quick lookup
+  const stepColorMap = new Map<string, { strokeColor?: string; backgroundColor?: string }>()
+  for (const step of args.steps) {
+    if (step.strokeColor || step.backgroundColor) {
+      stepColorMap.set(step.id, { strokeColor: step.strokeColor, backgroundColor: step.backgroundColor })
+    }
+  }
+
   // Create nodes with appropriate shapes
   for (const node of layout.nodes) {
     const elementId = generateId()
@@ -120,12 +133,17 @@ export function handleCreateFlowchart(
         shapeType = "rectangle"
     }
 
-    const colors = nodeColors[node.type] || { stroke: strokeColors[8], bg: bgColors[9] }
+    // Per-node colors take priority, then type-based defaults
+    const stepColors = stepColorMap.get(node.id)
+    const typeColors = nodeColors[node.type] || { stroke: strokeColors[8], bg: bgColors[9] }
+    
+    const finalStrokeColor = stepColors?.strokeColor || typeColors.stroke
+    const finalBgColor = stepColors?.backgroundColor || typeColors.bg
 
     const shapeElement = {
       ...createShapeElement(shapeType, node.x, node.y, node.width, node.height, {
-        strokeColor: colors.stroke,
-        backgroundColor: colors.bg,
+        strokeColor: finalStrokeColor,
+        backgroundColor: finalBgColor,
       }),
       id: elementId,
       connectable: true, // Mark as connectable for SmartConnections
