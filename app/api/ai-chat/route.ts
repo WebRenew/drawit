@@ -75,7 +75,7 @@ export async function POST(req: Request) {
       theme?: string
     }
 
-    const selectedModelId = req.headers.get("x-selected-model") || "anthropic/claude-3-5-sonnet-latest"
+    const selectedModelId = req.headers.get("x-selected-model") || "anthropic/claude-sonnet-4.5"
 
     // Default canvas info if not provided
     const canvas = canvasInfo || { centerX: 400, centerY: 300, width: 800, height: 600 }
@@ -92,7 +92,7 @@ export async function POST(req: Request) {
     } else if (selectedModelId.startsWith("openai/")) {
       model = openai(selectedModelId.replace("openai/", ""))
     } else {
-      model = anthropic("claude-3-5-sonnet-latest")
+      model = anthropic("claude-sonnet-4.5")
     }
 
     const result = streamText({
