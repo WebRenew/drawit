@@ -37,18 +37,23 @@ You can create:
 - Basic shapes (rectangles, circles, text, etc.)
 
 COLORS:
-- When the user specifies colors, YOU MUST use those exact colors.
-- Use the strokeColor parameter for border/outline colors.
-- Use the backgroundColor parameter for fill colors.
+- When the user specifies colors, YOU MUST use those exact colors on EACH NODE.
+- Use strokeColor and backgroundColor on EACH individual node in the nodes array.
 - Colors can be hex codes (#FF5733), named colors (red, blue), or rgb/hsl values.
-- If user says "make it blue" or "use purple nodes", apply those colors to strokeColor and backgroundColor.
-- Pass colors to the colorScheme parameter when creating diagrams.
+- If user says "use blue, red, orange" etc., apply DIFFERENT colors to DIFFERENT nodes.
+
+CONNECTIONS ARE CRITICAL:
+- ALWAYS include connections/links between nodes to show relationships
+- For createNetworkDiagram: include a "links" array with {from, to} for EVERY connection
+- For createFlowchart: include a "connections" array with {from, to} for EVERY connection
+- Diagrams without connections are incomplete and useless
 
 WORKFLOW:
 1. ALWAYS call getCanvasState first to see existing content
 2. Use the appropriate tool to create the requested diagram
-3. If user specifies colors, pass them in the colorScheme parameter
-4. Provide a brief summary of what was created
+3. ALWAYS include connections/links between related nodes
+4. Apply different colors to different nodes when user requests multiple colors
+5. Provide a brief summary of what was created
 
 When recreating from images:
 - Analyze the image carefully
@@ -232,7 +237,7 @@ export async function POST(req: Request) {
         }),
 
         createNetworkDiagram: tool({
-          description: "Create a network infrastructure diagram. Supports per-node colors for visual distinction.",
+          description: "Create a network/architecture diagram showing how systems connect. Supports per-node colors.",
           inputSchema: z.object({
             nodes: z.array(
               z.object({
@@ -243,14 +248,16 @@ export async function POST(req: Request) {
                 backgroundColor: z.string().optional().describe("Fill color for this specific node"),
               }),
             ),
-            connections: z.array(
+            links: z.array(
               z.object({
-                from: z.string(),
-                to: z.string(),
+                from: z.string().describe("Source node id"),
+                to: z.string().describe("Target node id"),
                 label: z.string().optional(),
               }),
-            ),
-            layout: z.enum(["tree", "circular", "grid", "force"]).optional(),
+            ).describe("Connections between nodes - REQUIRED for showing relationships"),
+            topology: z.enum(["star", "ring", "mesh", "tree", "bus"]).describe("Layout topology for the diagram"),
+            centerNodeId: z.string().optional().describe("Required for star topology - the central node"),
+            rootNodeId: z.string().optional().describe("Required for tree topology - the root node"),
           }),
           outputSchema: toolOutputSchema,
         }),
