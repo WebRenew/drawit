@@ -4,7 +4,6 @@ import { useState } from "react"
 import { Canvas } from "@/components/editor/canvas"
 import { DrawingRoomProvider } from "@/components/room-provider"
 import { AIChatPanel } from "@/components/ai-chat-panel"
-import { V0Badge } from "@/components/v0-badge"
 import type { PreviewState } from "@/lib/types"
 
 export default function EditorPage() {
@@ -16,7 +15,6 @@ export default function EditorPage() {
         <Canvas previewElements={previewState} />
         <AIChatPanel onPreviewChange={setPreviewState} />
       </DrawingRoomProvider>
-      <V0Badge />
     </main>
   )
 }
