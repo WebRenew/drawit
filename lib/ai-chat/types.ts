@@ -9,10 +9,6 @@ export interface AIModel {
 
 export const AVAILABLE_MODELS: AIModel[] = [
   { id: "anthropic/claude-sonnet-4.5", name: "Claude Sonnet 4.5" },
-  { id: "anthropic/claude-3-5-haiku-latest", name: "Claude 3.5 Haiku" },
-  { id: "google/gemini-1.5-pro", name: "Gemini 1.5 Pro" },
-  { id: "openai/gpt-4o", name: "GPT-4o" },
-  { id: "openai/o1-mini", name: "o1-mini" },
 ]
 
 export const DEFAULT_MODEL = "anthropic/claude-sonnet-4.5"
