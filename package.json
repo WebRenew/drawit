@@ -9,10 +9,7 @@
     "start": "next start"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "beta",
     "@ai-sdk/gateway": "beta",
-    "@ai-sdk/google": "beta",
-    "@ai-sdk/openai": "beta",
     "@ai-sdk/react": "beta",
     "@dagrejs/dagre": "latest",
     "@hookform/resolvers": "^3.10.0",

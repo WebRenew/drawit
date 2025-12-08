@@ -8,18 +8,9 @@ importers:
 
   .:
     dependencies:
-      '@ai-sdk/anthropic':
-        specifier: beta
-        version: 3.0.0-beta.77(effect@3.18.4)(zod@3.25.76)
       '@ai-sdk/gateway':
         specifier: beta
         version: 2.0.0-beta.73(effect@3.18.4)(zod@3.25.76)
-      '@ai-sdk/google':
-        specifier: beta
-        version: 3.0.0-beta.66(effect@3.18.4)(zod@3.25.76)
-      '@ai-sdk/openai':
-        specifier: beta
-        version: 3.0.0-beta.88(effect@3.18.4)(zod@3.25.76)
       '@ai-sdk/react':
         specifier: beta
         version: 3.0.0-beta.140(effect@3.18.4)(react@19.2.0)(zod@3.25.76)
@@ -243,26 +234,8 @@ importers:
 
 packages:
 
-  '@ai-sdk/anthropic@3.0.0-beta.77':
-    resolution: {integrity: sha512-bRpNGEEqdmUNqV/aLtJ06BfoTAEZEK4f2G0uln4DXr0zueLhAXeE6B3qJLlitKuYI4LiXNJz7eannSUXxoqN+w==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      zod: ^3.25.76 || ^4.1.8
-
   '@ai-sdk/gateway@2.0.0-beta.73':
     resolution: {integrity: sha512-fVuJ4emiymdSmlB7IiRfSyaWZm3+zqBUf+KYJiYrlpQEXGZPMTgo2xNhVlyb0oWzFyFBnbIChYBNZgzFs48ckQ==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      zod: ^3.25.76 || ^4.1.8
-
-  '@ai-sdk/google@3.0.0-beta.66':
-    resolution: {integrity: sha512-IOoWFodE1gPAlce0eUVgsdMvYkVX+i0PPpqSacXEcXl3feFbUapOtZd9vZeL0yWbmpSFh6sQE5fRN9x7Go8Wuw==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      zod: ^3.25.76 || ^4.1.8
-
-  '@ai-sdk/openai@3.0.0-beta.88':
-    resolution: {integrity: sha512-XnzUZ0CDIoK7Lorx9X14lKirBNo0rCQqliAXLoGL2ldpsJ1OPXfP32mqg0cRMDQL29EmSYxNMczzjm0GWUys5g==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -3125,41 +3098,11 @@ packages:
 
 snapshots:
 
-  '@ai-sdk/anthropic@3.0.0-beta.77(effect@3.18.4)(zod@3.25.76)':
-    dependencies:
-      '@ai-sdk/provider': 3.0.0-beta.25
-      '@ai-sdk/provider-utils': 4.0.0-beta.44(effect@3.18.4)(zod@3.25.76)
-      zod: 3.25.76
-    transitivePeerDependencies:
-      - '@valibot/to-json-schema'
-      - arktype
-      - effect
-
   '@ai-sdk/gateway@2.0.0-beta.73(effect@3.18.4)(zod@3.25.76)':
     dependencies:
       '@ai-sdk/provider': 3.0.0-beta.25
       '@ai-sdk/provider-utils': 4.0.0-beta.44(effect@3.18.4)(zod@3.25.76)
       '@vercel/oidc': 3.0.5
-      zod: 3.25.76
-    transitivePeerDependencies:
-      - '@valibot/to-json-schema'
-      - arktype
-      - effect
-
-  '@ai-sdk/google@3.0.0-beta.66(effect@3.18.4)(zod@3.25.76)':
-    dependencies:
-      '@ai-sdk/provider': 3.0.0-beta.25
-      '@ai-sdk/provider-utils': 4.0.0-beta.44(effect@3.18.4)(zod@3.25.76)
-      zod: 3.25.76
-    transitivePeerDependencies:
-      - '@valibot/to-json-schema'
-      - arktype
-      - effect
-
-  '@ai-sdk/openai@3.0.0-beta.88(effect@3.18.4)(zod@3.25.76)':
-    dependencies:
-      '@ai-sdk/provider': 3.0.0-beta.25
-      '@ai-sdk/provider-utils': 4.0.0-beta.44(effect@3.18.4)(zod@3.25.76)
       zod: 3.25.76
     transitivePeerDependencies:
       - '@valibot/to-json-schema'
