@@ -52,7 +52,7 @@ export function WorkflowAIChat({ canvasRef }: WorkflowAIChatProps) {
             toolCallId: toolCall.toolCallId,
             output: {
               success: true,
-              message: `Created workflow with ${input.nodes.length} nodes and ${input.edges.length} connections`,
+              message: `Created workflow with ${input.nodes.length} nodes and ${edges.length} connections`,
               nodeIds: input.nodes.map((n) => n.id),
             },
           })
