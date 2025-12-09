@@ -536,7 +536,7 @@ export const aiDiagramTask = task({
             },
           }),
         },
-        maxSteps: 3,
+        // Note: maxSteps removed - not supported in generateText, tools execute once
       })
 
       result.summary = aiResult.text || "Diagram created successfully"

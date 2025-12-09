@@ -85,3 +85,5 @@ CREATE POLICY "Users can delete own temp images"
 ON public.temp_images FOR DELETE
 USING (auth.uid() = user_id);
 
+
+

@@ -1,223 +1,184 @@
 /**
  * Canvas State Serializer
- * Creates a compact JSON representation of canvas state for AI agent context
+ * Creates a clean n8n-style JSON representation of canvas state for AI agent context
  * This is automatically included in every request so the agent knows what's on the canvas
  */
 
 import type { CanvasElement, SmartConnection } from "@/lib/types"
 
 /**
- * Compact element representation for AI context
- * Includes only the properties the AI needs to understand and edit elements
+ * n8n-style node representation
+ * Clean, flat structure optimized for AI understanding
  */
-export interface SerializedElement {
+export interface CanvasNode {
   id: string
   type: string
-  x: number
-  y: number
-  width: number
-  height: number
-  label?: string
-  text?: string
-  strokeColor?: string
-  backgroundColor?: string
-  // Connection tracking
-  connectable?: boolean
+  label: string
+  position: [number, number]  // [x, y]
+  size: [number, number]      // [width, height]
+  style?: {
+    stroke?: string
+    fill?: string
+  }
 }
 
 /**
- * Compact connection representation for AI context
+ * n8n-style edge representation
+ * Simple source → target with optional label
  */
-export interface SerializedConnection {
+export interface CanvasEdge {
   id: string
-  sourceId: string
-  targetId: string
+  source: string
+  target: string
   label?: string
 }
 
 /**
- * Full canvas state for AI context
+ * n8n-style canvas state JSON
+ * Clean, structured format for AI to read and manipulate
  */
-export interface SerializedCanvasState {
-  /** Number of elements on canvas */
-  elementCount: number
-  /** Number of connections on canvas */
-  connectionCount: number
-  /** Compact element list */
-  elements: SerializedElement[]
-  /** Compact connection list */
-  connections: SerializedConnection[]
-  /** Bounding box of all content */
-  bounds: {
-    minX: number
-    minY: number
-    maxX: number
-    maxY: number
-    width: number
-    height: number
-  } | null
-  /** Summary for quick understanding */
-  summary: string
+export interface CanvasStateJSON {
+  /** Schema version for future compatibility */
+  version: 1
+  /** Summary statistics */
+  meta: {
+    nodeCount: number
+    edgeCount: number
+    bounds: {
+      x: [number, number]  // [min, max]
+      y: [number, number]  // [min, max]
+    } | null
+  }
+  /** All nodes on canvas */
+  nodes: CanvasNode[]
+  /** All connections between nodes */
+  edges: CanvasEdge[]
 }
 
 /**
- * Serialize a single element to compact form
+ * Convert canvas element to n8n-style node
  */
-function serializeElement(el: CanvasElement): SerializedElement {
-  const serialized: SerializedElement = {
+function toNode(el: CanvasElement): CanvasNode {
+  const node: CanvasNode = {
     id: el.id,
     type: el.type,
-    x: Math.round(el.x),
-    y: Math.round(el.y),
-    width: Math.round(el.width),
-    height: Math.round(el.height),
+    label: el.label || el.text || "",
+    position: [Math.round(el.x), Math.round(el.y)],
+    size: [Math.round(el.width), Math.round(el.height)],
   }
 
-  // Only include optional fields if they have values
-  if (el.label) serialized.label = el.label
-  if (el.text) serialized.text = el.text
-  if (el.strokeColor && typeof el.strokeColor === "string") {
-    serialized.strokeColor = el.strokeColor
+  // Only include style if non-default
+  const hasStroke = el.strokeColor && typeof el.strokeColor === "string"
+  const hasFill = el.backgroundColor && el.backgroundColor !== "transparent"
+  
+  if (hasStroke || hasFill) {
+    node.style = {}
+    if (hasStroke) node.style.stroke = el.strokeColor as string
+    if (hasFill) node.style.fill = el.backgroundColor
   }
-  if (el.backgroundColor && el.backgroundColor !== "transparent") {
-    serialized.backgroundColor = el.backgroundColor
-  }
-  if (el.connectable) serialized.connectable = true
 
-  return serialized
+  return node
 }
 
 /**
- * Serialize a single connection to compact form
+ * Convert smart connection to n8n-style edge
  */
-function serializeConnection(conn: SmartConnection): SerializedConnection {
-  const serialized: SerializedConnection = {
+function toEdge(conn: SmartConnection): CanvasEdge {
+  const edge: CanvasEdge = {
     id: conn.id,
-    sourceId: conn.sourceId,
-    targetId: conn.targetId,
+    source: conn.sourceId,
+    target: conn.targetId,
   }
-
-  if (conn.label) serialized.label = conn.label
-
-  return serialized
+  if (conn.label) edge.label = conn.label
+  return edge
 }
 
 /**
- * Calculate bounding box of all elements
+ * Calculate bounds of all elements
  */
-function calculateBounds(elements: CanvasElement[]): SerializedCanvasState["bounds"] {
+function calculateBounds(elements: CanvasElement[]): CanvasStateJSON["meta"]["bounds"] {
   if (elements.length === 0) return null
 
-  let minX = Infinity
-  let minY = Infinity
-  let maxX = -Infinity
-  let maxY = -Infinity
+  let minX = Infinity, maxX = -Infinity
+  let minY = Infinity, maxY = -Infinity
 
   for (const el of elements) {
     minX = Math.min(minX, el.x)
-    minY = Math.min(minY, el.y)
     maxX = Math.max(maxX, el.x + el.width)
+    minY = Math.min(minY, el.y)
     maxY = Math.max(maxY, el.y + el.height)
   }
 
   return {
-    minX: Math.round(minX),
-    minY: Math.round(minY),
-    maxX: Math.round(maxX),
-    maxY: Math.round(maxY),
-    width: Math.round(maxX - minX),
-    height: Math.round(maxY - minY),
+    x: [Math.round(minX), Math.round(maxX)],
+    y: [Math.round(minY), Math.round(maxY)],
   }
 }
 
 /**
- * Generate a human-readable summary of canvas contents
- */
-function generateSummary(elements: CanvasElement[], connections: SmartConnection[]): string {
-  if (elements.length === 0) {
-    return "Canvas is empty."
-  }
-
-  // Count element types
-  const typeCounts = new Map<string, number>()
-  for (const el of elements) {
-    typeCounts.set(el.type, (typeCounts.get(el.type) || 0) + 1)
-  }
-
-  const typeList = Array.from(typeCounts.entries())
-    .map(([type, count]) => `${count} ${type}${count > 1 ? "s" : ""}`)
-    .join(", ")
-
-  const connInfo = connections.length > 0 
-    ? ` with ${connections.length} connection${connections.length > 1 ? "s" : ""}`
-    : ""
-
-  return `Canvas has ${elements.length} element${elements.length > 1 ? "s" : ""} (${typeList})${connInfo}.`
-}
-
-/**
- * Serialize full canvas state for AI context
- * This creates a compact JSON object that tells the AI what's currently on the canvas
+ * Serialize canvas state to n8n-style JSON
  */
 export function serializeCanvasState(
   elements: CanvasElement[],
   connections: SmartConnection[]
-): SerializedCanvasState {
+): CanvasStateJSON {
   return {
-    elementCount: elements.length,
-    connectionCount: connections.length,
-    elements: elements.map(serializeElement),
-    connections: connections.map(serializeConnection),
-    bounds: calculateBounds(elements),
-    summary: generateSummary(elements, connections),
+    version: 1,
+    meta: {
+      nodeCount: elements.length,
+      edgeCount: connections.length,
+      bounds: calculateBounds(elements),
+    },
+    nodes: elements.map(toNode),
+    edges: connections.map(toEdge),
   }
 }
 
 /**
- * Create a minimal state string for the system prompt
- * This is a more compact representation for token efficiency
+ * Create JSON string for system prompt
+ * Compact but readable format for AI context
  */
 export function createCanvasContextString(
   elements: CanvasElement[],
   connections: SmartConnection[]
 ): string {
   if (elements.length === 0) {
-    return "CURRENT CANVAS: Empty - no elements or connections."
+    return `CURRENT CANVAS STATE:
+\`\`\`json
+{"version":1,"meta":{"nodeCount":0,"edgeCount":0,"bounds":null},"nodes":[],"edges":[]}
+\`\`\`
+Canvas is empty. Place new content at canvas center.`
   }
 
   const state = serializeCanvasState(elements, connections)
   
-  // Create compact element list
-  const elementList = state.elements
-    .slice(0, 20) // Limit to first 20 to avoid token bloat
-    .map(el => {
-      const label = el.label || el.text || ""
-      const labelPart = label ? ` "${label}"` : ""
-      return `  - ${el.id}: ${el.type}${labelPart} at (${el.x},${el.y}) size ${el.width}x${el.height}`
-    })
-    .join("\n")
+  // Limit nodes/edges to avoid token bloat (keep first 25 of each)
+  const truncatedState: CanvasStateJSON = {
+    ...state,
+    nodes: state.nodes.slice(0, 25),
+    edges: state.edges.slice(0, 20),
+  }
 
-  const truncatedNote = elements.length > 20 
-    ? `\n  ... and ${elements.length - 20} more elements`
+  const truncationNote = elements.length > 25 || connections.length > 20
+    ? `\n(Showing ${truncatedState.nodes.length}/${elements.length} nodes, ${truncatedState.edges.length}/${connections.length} edges)`
     : ""
 
-  // Create compact connection list  
-  const connectionList = state.connections.length > 0
-    ? "\nConnections:\n" + state.connections
-        .slice(0, 15)
-        .map(c => `  - ${c.sourceId} → ${c.targetId}${c.label ? ` "${c.label}"` : ""}`)
-        .join("\n")
-    : ""
-
-  const connTruncatedNote = connections.length > 15
-    ? `\n  ... and ${connections.length - 15} more connections`
-    : ""
+  // Pretty print with 2-space indent for readability
+  const jsonStr = JSON.stringify(truncatedState, null, 2)
 
   return `CURRENT CANVAS STATE:
-${state.summary}
-Elements:
-${elementList}${truncatedNote}${connectionList}${connTruncatedNote}
+\`\`\`json
+${jsonStr}
+\`\`\`${truncationNote}
 
-Use these IDs when updating existing elements. Create new IDs for new elements.`
+**Instructions:**
+- Use existing \`id\` values when updating nodes
+- Reference \`source\`/\`target\` IDs when creating edges
+- New elements should use unique IDs (e.g., nanoid)
+- Position new content relative to existing \`bounds\``
 }
 
+// Legacy exports for backwards compatibility
+export type SerializedElement = CanvasNode
+export type SerializedConnection = CanvasEdge
+export type SerializedCanvasState = CanvasStateJSON

@@ -11,8 +11,9 @@ import type { UIMessage } from "ai"
 import { streamText, convertToModelMessages } from "ai"
 import { gateway } from "@ai-sdk/gateway"
 import { allTools } from "@/lib/tools"
-import { createCanvasContextString, type SerializedCanvasState } from "@/lib/ai-chat/canvas-state-serializer"
+import { createCanvasContextString } from "@/lib/ai-chat/canvas-state-serializer"
 import type { CanvasElement, SmartConnection } from "@/lib/types"
+import { createServerSupabaseClient } from "@/lib/supabase/server"
 
 export const maxDuration = 60
 
@@ -20,21 +21,26 @@ export const maxDuration = 60
  * Transform messages to handle file->image part conversion for v6 compatibility.
  * AI SDK v6's useChat sends File[] which it converts to multi-modal parts.
  * This function ensures compatibility with any format variations.
+ * 
+ * Note: Uses type assertions because we're transforming between SDK version formats
+ * where the exact part types may vary at runtime.
  */
 function transformMessagesForV6(messages: UIMessage[]): UIMessage[] {
-  return messages.map((msg) => {
+  return messages.map((msg): UIMessage => {
     if (msg.role !== "user" || !msg.parts) {
       return msg
     }
 
     // Debug: Log what parts we're receiving
-    const partTypes = msg.parts.map((p: Record<string, unknown>) => p.type)
+    const partTypes = msg.parts.map((p) => (p as { type?: string }).type)
     console.log("[ai-chat] Message parts types:", partTypes)
 
-    const transformedParts = msg.parts.map((part: Record<string, unknown>) => {
+    const transformedParts = msg.parts.map((part) => {
+      const typedPart = part as { type?: string; mediaType?: string; data?: string; url?: string; image?: string }
+      
       // Handle file parts (legacy format) - convert to image parts
-      if (part.type === "file" && typeof part.mediaType === "string" && part.mediaType.startsWith("image/")) {
-        const dataUrl = part.data || part.url
+      if (typedPart.type === "file" && typeof typedPart.mediaType === "string" && typedPart.mediaType.startsWith("image/")) {
+        const dataUrl = typedPart.data || typedPart.url
         if (typeof dataUrl === "string") {
           console.log("[ai-chat] Transforming file part to image part")
           return {
@@ -44,17 +50,19 @@ function transformMessagesForV6(messages: UIMessage[]): UIMessage[] {
         }
       }
       // Handle image parts (v6 format) - pass through
-      if (part.type === "image") {
+      if (typedPart.type === "image") {
         console.log("[ai-chat] Image part detected (already correct format)")
         return part
       }
       return part
     })
 
+    // Return transformed message with new parts
+    // Type assertion needed as we're converting between SDK format variations
     return {
       ...msg,
       parts: transformedParts,
-    }
+    } as UIMessage
   })
 }
 
@@ -213,6 +221,21 @@ When user uploads an image to recreate:
 
 export async function POST(req: Request) {
   try {
+    // Authentication check - require logged-in user
+    const supabase = await createServerSupabaseClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    
+    if (authError || !user) {
+      console.warn("[ai-chat] Unauthorized request attempted")
+      return new Response(
+        JSON.stringify({ error: "Unauthorized - please sign in to use AI features" }), 
+        { 
+          status: 401, 
+          headers: { "Content-Type": "application/json" } 
+        }
+      )
+    }
+
     const body = await req.json()
     const { messages, canvasInfo, theme, elements, connections } = body as {
       messages: UIMessage[]
@@ -236,7 +259,7 @@ export async function POST(req: Request) {
       ? createCanvasContextString(elements, connections)
       : undefined
 
-    console.log("[ai-chat] Request - model:", selectedModelId, "messages:", messages.length, "elements:", elements?.length ?? 0)
+    console.log("[ai-chat] Request - user:", user.id, "model:", selectedModelId, "messages:", messages.length, "elements:", elements?.length ?? 0)
 
     // Transform messages to handle v5->v6 format differences (file->image parts)
     const transformedMessages = transformMessagesForV6(messages)

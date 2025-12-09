@@ -61,6 +61,9 @@ import {
 // Connection utilities for proper SmartConnection creation
 import { convertBackgroundConnections } from "@/lib/ai-chat/connection-helpers"
 
+// Title extraction for dynamic diagram naming
+import { extractTitleFromMessages, isDiagramCreationTool, getDefaultTitleForTool } from "@/lib/ai-chat/title-extractor"
+
 async function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -127,6 +130,8 @@ export function AIChatPanel({ onPreviewChange, canvasDimensions, onElementsCreat
   const addConnection = useCanvasStore((state) => state.addConnection)
   const updateElements = useCanvasStore((state) => state.updateElements)
   const clearAll = useCanvasStore((state) => state.clearAll)
+  const updateDiagramTitle = useCanvasStore((state) => state.updateDiagramTitle)
+  const currentDiagram = useCanvasStore((state) => state.currentDiagram)
 
   // Background task hook for complex diagrams
   const { 
@@ -376,6 +381,23 @@ export function AIChatPanel({ onPreviewChange, canvasDimensions, onElementsCreat
 
         const resultString = typeof result === "string" ? result : JSON.stringify(result)
         console.log("[v0] Tool result:", resultString.substring(0, 200))
+
+        // Auto-name diagram based on chat context when a diagram is created
+        if (isDiagramCreationTool(toolCall.toolName)) {
+          const resultObj = typeof result === "object" ? result as Record<string, unknown> : null
+          const wasSuccessful = resultObj?.success === true || resultObj?.elementsCreated
+          
+          // Only update title if diagram was created successfully and title is still default
+          if (wasSuccessful && currentDiagram?.title === "Untitled Diagram") {
+            const extractedTitle = extractTitleFromMessages(messages) 
+              || getDefaultTitleForTool(toolCall.toolName)
+            
+            console.log("[v0] Auto-naming diagram:", extractedTitle)
+            updateDiagramTitle(extractedTitle).catch(err => {
+              console.error("[v0] Failed to update diagram title:", err)
+            })
+          }
+        }
 
         addToolResult({
           tool: toolCall.toolName,
