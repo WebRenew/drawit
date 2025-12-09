@@ -42,7 +42,7 @@ class ImageService {
       const storagePath = `${userId}/${fileName}`
 
       // Upload to Supabase Storage
-      const { data, error } = await this.supabase.storage
+      const { data: _data, error } = await this.supabase.storage
         .from(BUCKET_NAME)
         .upload(storagePath, file, {
           contentType: file.type,

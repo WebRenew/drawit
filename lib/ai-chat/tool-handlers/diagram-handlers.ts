@@ -338,7 +338,7 @@ export function handleCreateNetworkDiagram(
 
   const isDark = ctx.resolvedTheme !== "light"
   const strokeColors = getStrokeColors(isDark)
-  const bgColors = getBackgroundColors(isDark)
+  const _bgColors = getBackgroundColors(isDark)
 
   const customStroke = args.colorScheme?.strokeColor
   const customBg = args.colorScheme?.backgroundColor
@@ -538,7 +538,7 @@ export function handleCreateDiagram(
       layoutResult = treeLayout(args.nodes, args.edges, args.layoutOptions)
   }
 
-  const collisionCount = detectCollisions(layoutResult)
+  const _collisionCount = detectCollisions(layoutResult)
   const nodeElementIds = new Map<string, string>()
 
   // Create nodes

@@ -13,7 +13,7 @@ interface ImageUploadDialogProps {
   position?: { x: number; y: number }
 }
 
-export function ImageUploadDialog({ onImageSelect, onSelect, onClose, position }: ImageUploadDialogProps) {
+export function ImageUploadDialog({ onImageSelect, onSelect, onClose, position: _position }: ImageUploadDialogProps) {
   // Support both onImageSelect and onSelect for backwards compatibility
   const handleImageSelect = (imageUrl: string) => {
     if (onImageSelect) onImageSelect(imageUrl)

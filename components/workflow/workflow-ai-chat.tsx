@@ -112,7 +112,7 @@ export function WorkflowAIChat({ canvasRef }: WorkflowAIChatProps) {
             <div className="text-center text-muted-foreground text-sm py-8">
               <p>Ask me to create workflows!</p>
               <p className="mt-2 text-xs">
-                Try: "Create a workflow that fetches data from an API, transforms it, and saves to database"
+                Try: &quot;Create a workflow that fetches data from an API, transforms it, and saves to database&quot;
               </p>
             </div>
           )}

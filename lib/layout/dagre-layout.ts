@@ -198,7 +198,7 @@ export function detectOverlaps(nodes: Node[]): Array<{ nodeA: string; nodeB: str
  */
 export function analyzeLayoutQuality(
   nodes: Node[],
-  edges: Edge[],
+  _edges: Edge[],
 ): {
   issues: string[]
   hasOverlaps: boolean

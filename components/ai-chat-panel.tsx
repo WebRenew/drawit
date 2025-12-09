@@ -40,7 +40,6 @@ import { ChatHistorySheet } from "@/components/chat-history-sheet"
 import {
   handleGetCanvasState,
   handleCreateFlowchart,
-  handleCreateDiagram,
   handleCreateOrgChart,
   handleCreateERDiagram,
   handleCreateNetworkDiagram,
@@ -103,7 +102,7 @@ function mapDiagramTypeToCanvasType(diagramType: string): CanvasElement["type"] 
 const CHAT_HISTORY_LOCAL_KEY = "drawit-chat-history"
 const SAVE_DEBOUNCE_MS = 2000
 
-export function AIChatPanel({ onPreviewChange, canvasDimensions, onElementsCreated }: AIChatPanelProps) {
+export function AIChatPanel({ canvasDimensions }: AIChatPanelProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [input, setInput] = useState("")
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([])
@@ -125,7 +124,7 @@ export function AIChatPanel({ onPreviewChange, canvasDimensions, onElementsCreat
   const currentDiagramId = useCanvasStore((state) => state.currentDiagramId)
 
   const elements = useCanvasStore((state) => state.elements)
-  const connections = useCanvasStore((state) => state.connections)
+  const _connections = useCanvasStore((state) => state.connections)
   const addElement = useCanvasStore((state) => state.addElement)
   const addConnection = useCanvasStore((state) => state.addConnection)
   const updateElements = useCanvasStore((state) => state.updateElements)

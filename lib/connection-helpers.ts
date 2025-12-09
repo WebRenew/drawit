@@ -153,7 +153,7 @@ export function calculateAutoAnchor(
 
   const dx = toCenter.x - fromCenter.x
   const dy = toCenter.y - fromCenter.y
-  const angle = Math.atan2(dy, dx)
+  const _angle = Math.atan2(dy, dx)
 
   // Determine primary direction
   const absDx = Math.abs(dx)
@@ -266,7 +266,7 @@ export function calculateOrthogonalPath(
   end: { x: number; y: number },
 ): Array<{ x: number; y: number }> {
   const dx = end.x - start.x
-  const dy = end.y - start.y
+  const _dy = end.y - start.y
 
   // Create right-angle path with midpoint
   const midX = start.x + dx / 2

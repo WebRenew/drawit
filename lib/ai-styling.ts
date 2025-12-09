@@ -222,7 +222,7 @@ export function getNodeStyling(
   strokeWidth: number
 } {
   const style = NODE_TYPE_STYLES[nodeType] || NODE_TYPE_STYLES.default
-  const colorPalette = theme.colors.primary // Default to primary
+  const _colorPalette = theme.colors.primary // Default to primary
 
   // Select color based on type
   let colors: string[]

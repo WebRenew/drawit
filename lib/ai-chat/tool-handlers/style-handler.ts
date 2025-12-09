@@ -51,7 +51,7 @@ export function handleUpdateStyles(
       elementsToUpdate = elements.filter((el) => ["line", "arrow"].includes(el.type))
       break
 
-    case "byType":
+    case "byType": {
       if (!args.elementType) {
         return {
           success: false,
@@ -71,8 +71,9 @@ export function handleUpdateStyles(
       const matchTypes = typeMap[args.elementType.toLowerCase()] || [args.elementType]
       elementsToUpdate = elements.filter((el) => matchTypes.includes(el.type))
       break
+    }
 
-    case "byIds":
+    case "byIds": {
       if (!args.elementIds || args.elementIds.length === 0) {
         return {
           success: false,
@@ -81,6 +82,7 @@ export function handleUpdateStyles(
       }
       elementsToUpdate = elements.filter((el) => args.elementIds!.includes(el.id))
       break
+    }
 
     default:
       return {

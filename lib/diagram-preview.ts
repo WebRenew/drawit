@@ -33,9 +33,9 @@ export function generateDiagramPreview(
   nodes: Array<{ id: string; label?: string; width?: number; height?: number; type?: string }>,
   edges: Array<{ from: string; to: string; label?: string }>,
   layout: "tree" | "circular" | "grid" | "force-directed",
-  layoutOptions?: any,
+  layoutOptions?: Record<string, unknown>,
 ): DiagramPreview {
-  // Import layout functions
+  // Import layout functions dynamically to avoid circular dependencies
   const { calculateTreeLayout, calculateCircularLayout, calculateGridLayout, calculateForceDirectedLayout } =
     require("./diagram-layouts")
 

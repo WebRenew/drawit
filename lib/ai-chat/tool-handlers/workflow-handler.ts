@@ -1,6 +1,6 @@
 import type { ToolHandlerContext } from "../types"
 import { generateId } from "../canvas-helpers"
-import { createTextElement, createShapeElement } from "../element-creators"
+import { createShapeElement } from "../element-creators"
 import { getStrokeColors, getBackgroundColors } from "@/lib/constants"
 import type { HandlePosition } from "@/lib/types"
 

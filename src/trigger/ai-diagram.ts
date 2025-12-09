@@ -479,7 +479,7 @@ export const aiDiagramTask = task({
     metadata.set("userId", userId)
     metadata.set("prompt", prompt.substring(0, 100))
 
-    let result: DiagramResult = {
+    const result: DiagramResult = {
       elements: [],
       connections: [],
       summary: "",

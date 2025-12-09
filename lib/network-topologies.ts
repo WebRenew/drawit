@@ -223,7 +223,7 @@ export function busTopology(nodes: NetworkNode[]): LayoutResult {
 /**
  * Get node style based on network device type
  */
-export function getNodeStyleForType(type: NetworkNode["type"], theme: "light" | "dark" = "light") {
+export function getNodeStyleForType(type: NetworkNode["type"], _theme: "light" | "dark" = "light") {
   const styles: Record<
     string,
     {

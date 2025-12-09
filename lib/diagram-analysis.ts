@@ -182,8 +182,8 @@ function checkOrphaned(elements: CanvasElement[]): DiagramIssue[] {
 
   for (const shape of shapes) {
     const hasConnection = connections.some((conn) => {
-      const connCenterX = conn.x + conn.width / 2
-      const connCenterY = conn.y + conn.height / 2
+      const _connCenterX = conn.x + conn.width / 2
+      const _connCenterY = conn.y + conn.height / 2
       const shapeCenterX = shape.x + shape.width / 2
       const shapeCenterY = shape.y + shape.height / 2
 

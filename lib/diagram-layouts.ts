@@ -328,7 +328,7 @@ export function dagreLayout(nodes: Node[], edges: Edge[], options?: LayoutOption
   const rankDir = options?.rankDirection || "TB"
   const nodeSpacing = options?.spacing || 150
   const rankSpacing = 200
-  const minSpacing = options?.minSpacing || 80
+  const _minSpacing = options?.minSpacing || 80
 
   // Build graph structure
   const nodeMap = new Map(nodes.map((n) => [n.id, n]))
@@ -659,9 +659,9 @@ export function enhancedForceDirectedLayout(nodes: Node[], edges: Edge[], option
           const pos1 = positions.get(node1.id)!
           const pos2 = positions.get(node2.id)!
           const width1 = node1.width || 150
-          const height1 = node1.height || 80
+          const _height1 = node1.height || 80
           const width2 = node2.width || 150
-          const height2 = node2.height || 80
+          const _height2 = node2.height || 80
 
           const dx = pos2.x - pos1.x
           const dy = pos2.y - pos1.y
@@ -723,8 +723,8 @@ export function detectCollisions(layout: LayoutResult): number {
 
   for (let i = 0; i < nodes.length; i++) {
     for (let j = i + 1; j < nodes.length; j++) {
-      const [id1, pos1] = nodes[i]
-      const [id2, pos2] = nodes[j]
+      const [_id1, pos1] = nodes[i]
+      const [_id2, pos2] = nodes[j]
 
       // Check if rectangles overlap
       const overlap =

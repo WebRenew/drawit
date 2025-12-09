@@ -52,7 +52,7 @@ type ResizeHandle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw"
 type LineHandle = "start" | "end"
 
 // Helper to sanitize elements for Liveblocks storage (removes undefined)
-const sanitizeElement = (element: CanvasElement): CanvasElement => {
+const _sanitizeElement = (element: CanvasElement): CanvasElement => {
   const sanitized = { ...element }
   Object.keys(sanitized).forEach((key) => {
     if (sanitized[key as keyof CanvasElement] === undefined) {
@@ -105,7 +105,7 @@ export function Canvas({ previewElements }: { previewElements?: PreviewState | n
 
   // Smooth scroll settings - lower = smoother but slower
   const LERP_FACTOR = 0.24
-  const SCROLL_MULTIPLIER = 0.4 // Reduce scroll speed
+  const _SCROLL_MULTIPLIER = 0.4 // Reduce scroll speed
   const ZOOM_LERP_FACTOR = 0.3
 
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 })
@@ -166,7 +166,7 @@ export function Canvas({ previewElements }: { previewElements?: PreviewState | n
     prevElementCountRef.current = elements.length
   }, [elements.length, centerViewportOnElements])
 
-  const resetViewportToElements = useCallback(() => {
+  const _resetViewportToElements = useCallback(() => {
     if (elements.length === 0) return
 
     // Calculate bounding box of all elements
@@ -376,7 +376,7 @@ export function Canvas({ previewElements }: { previewElements?: PreviewState | n
         updateElements((prev) =>
           prev.map((el) => {
             if (appStateRef.current.selection.includes(el.id)) {
-              const { groupId, ...rest } = el
+              const { groupId: _groupId, ...rest } = el
               return rest
             }
             return el
@@ -1390,7 +1390,7 @@ export function Canvas({ previewElements }: { previewElements?: PreviewState | n
   }, [viewport])
 
   // Start smooth scroll animation if not already running
-  const startSmoothScroll = useCallback(() => {
+  const _startSmoothScroll = useCallback(() => {
     if (!isAnimatingRef.current) {
       isAnimatingRef.current = true
       animationFrameRef.current = requestAnimationFrame(animateSmoothScroll)
@@ -2085,7 +2085,7 @@ export function Canvas({ previewElements }: { previewElements?: PreviewState | n
               {
                 previewElements &&
                 previewElements.elements.map((el) => {
-                  const strokeDasharray = getStrokeDashArray(el.strokeStyle, el.strokeWidth)
+                  const _strokeDasharray = getStrokeDashArray(el.strokeStyle, el.strokeWidth)
 
                   // Gradient calculation for fill
                   const fillValue = isGradientStroke(el.strokeColor) ? `url(#${getGradientId(el.id)})` : el.backgroundColor

@@ -204,7 +204,7 @@ const nodeTypes = {
 }
 
 // Map handle position to React Flow position
-function mapHandlePosition(pos?: HandlePosition) {
+function _mapHandlePosition(pos?: HandlePosition) {
   switch (pos) {
     case "top":
       return "top"
@@ -220,7 +220,7 @@ function mapHandlePosition(pos?: HandlePosition) {
 }
 
 // Get anchor point on element edge based on handle position
-function getAnchorPoint(element: CanvasElement, handle: HandlePosition): { x: number; y: number } {
+function _getAnchorPoint(element: CanvasElement, handle: HandlePosition): { x: number; y: number } {
   const centerX = element.x + element.width / 2
   const centerY = element.y + element.height / 2
 

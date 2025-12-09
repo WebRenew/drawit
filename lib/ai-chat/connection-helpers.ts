@@ -5,7 +5,6 @@
  */
 
 import type { SmartConnection, HandlePosition, CanvasElement } from "@/lib/types"
-import { nanoid } from "nanoid"
 
 export interface ConnectionInput {
   sourceId: string
