@@ -235,6 +235,7 @@ export function AIChatPanel({ canvasDimensions }: AIChatPanelProps) {
       }
 
       console.log("[v0] Tool call received:", toolCall.toolName)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tool inputs are validated by Zod schemas at runtime
       const args = toolCall.input as any
 
       const toolContext = getToolContext()
@@ -525,12 +526,12 @@ export function AIChatPanel({ canvasDimensions }: AIChatPanelProps) {
     const timeoutId = setTimeout(() => {
       try {
         const serializableMessages = messages.map((msg) => {
-          const anyMsg = msg as any
+          const msgWithContent = msg as UIMessage & { content?: string; createdAt?: Date | string }
           const serializableParts = msg.parts?.filter((part) => {
             return part.type === "text" || part.type === "file" || part.type === "reasoning"
           }).map((part) => {
             if (part.type === "file") {
-              const filePart = part as any
+              const filePart = part as { type: "file"; url?: string; filename?: string; mimeType?: string }
               return {
                 type: "file",
                 url: filePart.url,
@@ -544,8 +545,8 @@ export function AIChatPanel({ canvasDimensions }: AIChatPanelProps) {
           return {
             id: msg.id,
             role: msg.role,
-            content: anyMsg.content || "",
-            createdAt: anyMsg.createdAt instanceof Date ? anyMsg.createdAt.toISOString() : anyMsg.createdAt,
+            content: msgWithContent.content || "",
+            createdAt: msgWithContent.createdAt instanceof Date ? msgWithContent.createdAt.toISOString() : msgWithContent.createdAt,
             ...(serializableParts && serializableParts.length > 0 && { parts: serializableParts }),
           }
         })
