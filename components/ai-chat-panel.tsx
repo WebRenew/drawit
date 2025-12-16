@@ -61,7 +61,7 @@ import {
 import { convertBackgroundConnections } from "@/lib/ai-chat/connection-helpers"
 
 // Title extraction for dynamic diagram naming
-import { extractTitleFromMessages, isDiagramCreationTool, getDefaultTitleForTool } from "@/lib/ai-chat/title-extractor"
+import { extractTitleFromMessage, extractTitleFromMessages, isDiagramCreationTool, getDefaultTitleForTool } from "@/lib/ai-chat/title-extractor"
 
 async function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -382,20 +382,30 @@ export function AIChatPanel({ canvasDimensions }: AIChatPanelProps) {
         const resultString = typeof result === "string" ? result : JSON.stringify(result)
         console.log("[v0] Tool result:", resultString.substring(0, 200))
 
-        // Auto-name diagram based on chat context when a diagram is created
+        // Auto-name diagram and chat based on chat context when a diagram is created
         if (isDiagramCreationTool(toolCall.toolName)) {
           const resultObj = typeof result === "object" ? result as Record<string, unknown> : null
           const wasSuccessful = resultObj?.success === true || resultObj?.elementsCreated
-          
-          // Only update title if diagram was created successfully and title is still default
-          if (wasSuccessful && currentDiagram?.title === "Untitled Diagram") {
-            const extractedTitle = extractTitleFromMessages(messages) 
+
+          if (wasSuccessful) {
+            const extractedTitle = extractTitleFromMessages(messages)
               || getDefaultTitleForTool(toolCall.toolName)
-            
-            console.log("[v0] Auto-naming diagram:", extractedTitle)
-            updateDiagramTitle(extractedTitle).catch(err => {
-              console.error("[v0] Failed to update diagram title:", err)
-            })
+
+            // Update diagram title if it's still default
+            if (currentDiagram?.title === "Untitled Diagram") {
+              console.log("[v0] Auto-naming diagram:", extractedTitle)
+              updateDiagramTitle(extractedTitle).catch(err => {
+                console.error("[v0] Failed to update diagram title:", err)
+              })
+            }
+
+            // Update chat session title if it's still default
+            if (chatSession && chatSession.title === "New Chat") {
+              console.log("[v0] Auto-naming chat session:", extractedTitle)
+              chatService.updateSession(chatSession.id, { title: extractedTitle }).catch(err => {
+                console.error("[v0] Failed to update chat session title:", err)
+              })
+            }
           }
         }
 
@@ -425,14 +435,14 @@ export function AIChatPanel({ canvasDimensions }: AIChatPanelProps) {
   useEffect(() => {
     const loadHistory = async () => {
       setIsLoadingHistory(true)
-      
+
       // If user is logged in, try to load from Supabase
       if (user) {
         try {
           // Get or create session for current diagram
           const session = await chatService.getOrCreateSession(currentDiagramId, selectedModel)
           setChatSession(session)
-          
+
           // Load messages from Supabase
           const dbMessages = await chatService.getMessages(session.id)
           if (dbMessages.length > 0) {
@@ -441,6 +451,27 @@ export function AIChatPanel({ canvasDimensions }: AIChatPanelProps) {
             console.log("[chat] Loaded", dbMessages.length, "messages from Supabase")
             setLastSavedToCloud(new Date())
           }
+
+          // Auto-name session and diagram if they're still default and we have messages
+          if (dbMessages.length > 0) {
+            const aiMessages = chatService.convertFromDbMessages(dbMessages)
+            const extractedTitle = extractTitleFromMessages(aiMessages)
+
+            if (extractedTitle) {
+              // Update chat session title if it's still default
+              if (session.title === "New Chat") {
+                await chatService.updateSession(session.id, { title: extractedTitle })
+                console.log("[chat] Auto-named session:", extractedTitle)
+              }
+
+              // Update diagram title if it's still default
+              if (currentDiagram?.title === "Untitled Diagram") {
+                await updateDiagramTitle(extractedTitle)
+                console.log("[chat] Auto-named diagram:", extractedTitle)
+              }
+            }
+          }
+
           setIsLoadingHistory(false)
           return
         } catch (error) {
@@ -661,6 +692,9 @@ export function AIChatPanel({ canvasDimensions }: AIChatPanelProps) {
     const imagesToSend = [...uploadedImages]
     setUploadedImages([])
 
+    // Check if this is the first message in the conversation
+    const isFirstMessage = messages.length === 0
+
     try {
       if (imagesToSend.length > 0 && user) {
         // Upload images to Supabase Storage and get public URLs
@@ -740,6 +774,28 @@ export function AIChatPanel({ canvasDimensions }: AIChatPanelProps) {
         })
       } else {
         sendMessage({ text: messageText })
+      }
+
+      // Auto-name diagram and chat session from first message
+      if (isFirstMessage && messageText) {
+        const extractedTitle = extractTitleFromMessage(messageText)
+        if (extractedTitle) {
+          // Update diagram title if it's still default
+          if (currentDiagram?.title === "Untitled Diagram") {
+            console.log("[v0] Auto-naming diagram from first message:", extractedTitle)
+            updateDiagramTitle(extractedTitle).catch(err => {
+              console.error("[v0] Failed to update diagram title:", err)
+            })
+          }
+
+          // Update chat session title if it's still default
+          if (chatSession && chatSession.title === "New Chat") {
+            console.log("[v0] Auto-naming chat session from first message:", extractedTitle)
+            chatService.updateSession(chatSession.id, { title: extractedTitle }).catch(err => {
+              console.error("[v0] Failed to update chat session title:", err)
+            })
+          }
+        }
       }
     } catch (err) {
       console.error("[v0] Error sending message:", err)
@@ -882,6 +938,7 @@ export function AIChatPanel({ canvasDimensions }: AIChatPanelProps) {
         <div className="flex items-center gap-1">
           <ChatHistorySheet
             currentSessionId={chatSession?.id}
+            currentDiagramId={currentDiagramId}
             onSelectSession={handleSelectSession}
             onNewChat={handleNewChat}
           />

@@ -44,12 +44,14 @@ import { formatDistanceToNow } from "date-fns"
 
 interface ChatHistorySheetProps {
   currentSessionId?: string | null
+  currentDiagramId?: string | null
   onSelectSession: (session: ChatSession) => void
   onNewChat: () => void
 }
 
 export function ChatHistorySheet({
   currentSessionId,
+  currentDiagramId,
   onSelectSession,
   onNewChat,
 }: ChatHistorySheetProps) {
@@ -61,19 +63,20 @@ export function ChatHistorySheet({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState("")
 
-  // Load sessions when sheet opens
+  // Load sessions when sheet opens - filtered by current diagram
   const loadSessions = useCallback(async () => {
     if (!user) return
     setIsLoading(true)
     try {
-      const data = await chatService.listSessions()
+      // Load sessions scoped to current diagram (or all if no diagram)
+      const data = await chatService.listSessions(currentDiagramId || undefined)
       setSessions(data)
     } catch (error) {
       console.error("Failed to load chat sessions:", error)
     } finally {
       setIsLoading(false)
     }
-  }, [user])
+  }, [user, currentDiagramId])
 
   useEffect(() => {
     if (isOpen && user) {
@@ -153,7 +156,9 @@ export function ChatHistorySheet({
           <SheetHeader>
             <SheetTitle>Chat History</SheetTitle>
             <SheetDescription>
-              Your previous conversations with the AI assistant
+              {currentDiagramId
+                ? "Conversations for this diagram"
+                : "Your previous conversations with the AI assistant"}
             </SheetDescription>
           </SheetHeader>
 
