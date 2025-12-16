@@ -1,6 +1,6 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import DOMPurify from "isomorphic-dompurify"
+import sanitizeHtml from "sanitize-html"
 
 // Security constants
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
@@ -23,19 +23,52 @@ const IMAGE_SIGNATURES: Record<string, number[][]> = {
 /**
  * Sanitize SVG content to prevent XSS attacks
  * Removes script tags, event handlers, and other dangerous content
+ * Uses sanitize-html which works in serverless environments (Node.js native)
  */
 function sanitizeSVG(svgContent: string): string {
-  // Configure DOMPurify for SVG sanitization
-  const cleanSVG = DOMPurify.sanitize(svgContent, {
-    USE_PROFILES: { svg: true, svgFilters: true },
-    ADD_TAGS: ['use'], // Allow use tag for SVG references
-    ADD_ATTR: ['target'], // Allow target attribute for links
-    FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'base', 'link', 'style'],
-    FORBID_ATTR: [
-      'onerror', 'onload', 'onclick', 'onmouseover', 'onmouseout',
-      'onmousemove', 'onmouseenter', 'onmouseleave', 'onfocus', 'onblur',
-      'onchange', 'onsubmit', 'onkeydown', 'onkeyup', 'onkeypress'
+  const cleanSVG = sanitizeHtml(svgContent, {
+    allowedTags: [
+      'svg', 'g', 'path', 'circle', 'rect', 'ellipse', 'line', 'polyline', 'polygon',
+      'text', 'tspan', 'defs', 'clipPath', 'mask', 'pattern', 'linearGradient',
+      'radialGradient', 'stop', 'use', 'symbol', 'marker', 'title', 'desc'
     ],
+    allowedAttributes: {
+      '*': [
+        'id', 'class', 'style', 'transform', 'fill', 'stroke', 'stroke-width',
+        'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'opacity',
+        'fill-opacity', 'stroke-opacity', 'x', 'y', 'x1', 'y1', 'x2', 'y2',
+        'cx', 'cy', 'r', 'rx', 'ry', 'width', 'height', 'd', 'points',
+        'viewBox', 'preserveAspectRatio', 'xmlns', 'xmlns:xlink'
+      ],
+      'svg': ['viewBox', 'width', 'height', 'xmlns', 'xmlns:xlink', 'version'],
+      'use': ['href', 'xlink:href', 'x', 'y', 'width', 'height'],
+      'linearGradient': ['x1', 'y1', 'x2', 'y2', 'gradientUnits', 'gradientTransform'],
+      'radialGradient': ['cx', 'cy', 'r', 'fx', 'fy', 'gradientUnits', 'gradientTransform'],
+      'stop': ['offset', 'stop-color', 'stop-opacity'],
+      'text': ['x', 'y', 'dx', 'dy', 'text-anchor', 'font-family', 'font-size', 'font-weight'],
+      'a': ['href', 'target'], // Allow links but target will be filtered by disallowedTagsMode
+    },
+    // Disallow all event handlers (on*)
+    allowedSchemes: ['http', 'https', 'mailto'],
+    allowedSchemesByTag: {
+      'a': ['http', 'https', 'mailto'],
+    },
+    // Remove any attributes starting with 'on' (event handlers)
+    transformTags: {
+      '*': (tagName, attribs) => {
+        const sanitizedAttribs: Record<string, string> = {}
+        for (const [key, value] of Object.entries(attribs)) {
+          // Block all event handlers
+          if (!key.toLowerCase().startsWith('on')) {
+            sanitizedAttribs[key] = value
+          }
+        }
+        return {
+          tagName,
+          attribs: sanitizedAttribs,
+        }
+      },
+    },
   })
 
   return cleanSVG
