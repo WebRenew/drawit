@@ -30,6 +30,33 @@ Drawit is an AI-powered collaborative whiteboard built with Next.js 16 (App Rout
 - `SmartConnection` - Connectors between elements with routing types (bezier, smoothstep, straight)
 - `AppState` - Current tool, selection, and default styling properties
 
+### Canvas Architecture (IMPORTANT)
+
+Drawit uses a **custom SVG canvas**, NOT React Flow for canvas management.
+
+**What React Flow IS used for:**
+- Connection path rendering only (`components/editor/smart-connector-layer.tsx`)
+- Invisible nodes are created at element positions
+- React Flow's edge algorithms (bezier, smoothstep) calculate connection paths
+- The paths are rendered, but React Flow does NOT manage the actual canvas elements
+
+**What React Flow IS NOT used for:**
+- Node/element creation or management
+- Canvas state (managed by Zustand)
+- AI diagram generation (all tools create SVG `CanvasElement` objects)
+
+**The Workflow Page (`/app/workflow`):**
+- Contains a React Flow-based workflow canvas (currently disabled)
+- This is a separate experiment, NOT integrated with the AI system
+- The `createWorkflow` AI tool creates SVG shapes on the main canvas, not React Flow nodes
+- See documentation in `app/workflow/page.tsx` for details
+
+**Key Files:**
+- `components/editor/canvas.tsx` - Main 2330-line custom SVG canvas (where AI creates diagrams)
+- `components/editor/smart-connector-layer.tsx` - React Flow for connection paths only
+- `lib/ai-chat/tool-handlers/` - All handlers create `CanvasElement` objects (SVG)
+- `app/workflow/page.tsx` - Disabled React Flow canvas (different system)
+
 ### AI Tool System
 
 #### Tool Definitions (`lib/tools/`)

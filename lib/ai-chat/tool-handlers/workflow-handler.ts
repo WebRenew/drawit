@@ -4,7 +4,16 @@ import { createShapeElement } from "../element-creators"
 import { getStrokeColors, getBackgroundColors } from "@/lib/constants"
 import type { HandlePosition } from "@/lib/types"
 
-interface WorkflowNode {
+/**
+ * SVGWorkflowNode - Configuration for workflow nodes that will be rendered as SVG shapes
+ *
+ * IMPORTANT: This creates SVG canvas elements, NOT React Flow nodes.
+ * Despite the name "workflow", this uses the custom SVG canvas implementation.
+ *
+ * The React Flow-based workflow canvas is disabled (see /app/workflow/page.tsx).
+ * Do not confuse with WorkflowNode type in /lib/workflow-types.ts (React Flow type).
+ */
+interface SVGWorkflowNode {
   id: string
   type: "trigger" | "action" | "condition" | "loop" | "transform" | "output"
   label: string
@@ -13,15 +22,15 @@ interface WorkflowNode {
   backgroundColor?: string
 }
 
-interface WorkflowConnection {
+interface SVGWorkflowConnection {
   from: string
   to: string
   label?: string
 }
 
 export interface CreateWorkflowInput {
-  nodes: WorkflowNode[]
-  connections: WorkflowConnection[]
+  nodes: SVGWorkflowNode[]
+  connections: SVGWorkflowConnection[]
   colorScheme?: {
     strokeColor?: string
     backgroundColor?: string
@@ -31,7 +40,7 @@ export interface CreateWorkflowInput {
 
 interface PositionedNode {
   id: string
-  type: WorkflowNode["type"]
+  type: SVGWorkflowNode["type"]
   label: string
   description?: string
   x: number
@@ -46,7 +55,7 @@ interface PositionedNode {
  * Get shape and default colors based on workflow node type
  */
 function getWorkflowNodeStyle(
-  type: WorkflowNode["type"],
+  type: SVGWorkflowNode["type"],
   isDark: boolean,
   strokeColors: string[],
   bgColors: string[],
@@ -77,10 +86,11 @@ function getWorkflowNodeStyle(
 
 /**
  * Calculate workflow layout - vertical flow with branching
+ * Creates SVG canvas elements positioned in a hierarchical flow
  */
 function calculateWorkflowLayout(
-  nodes: WorkflowNode[],
-  connections: WorkflowConnection[],
+  nodes: SVGWorkflowNode[],
+  connections: SVGWorkflowConnection[],
 ): PositionedNode[] {
   const positioned: PositionedNode[] = []
   const nodeWidth = 180
@@ -172,6 +182,28 @@ function calculateWorkflowLayout(
   return positioned
 }
 
+/**
+ * Handle createWorkflow AI tool - Creates n8n-style workflow diagrams on the SVG canvas
+ *
+ * IMPORTANT: This creates SVG shapes on the main canvas, NOT React Flow nodes.
+ *
+ * This handler:
+ * 1. Takes workflow node configurations (trigger, action, condition, etc.)
+ * 2. Calculates hierarchical layout positions
+ * 3. Creates SVG canvas elements with appropriate shapes and colors
+ * 4. Adds smart connections between nodes
+ * 5. Registers elements in the shape registry for future updates
+ *
+ * The workflow is rendered as standard CanvasElement objects that can be
+ * edited, moved, and manipulated like any other canvas shapes.
+ *
+ * @param args - Workflow configuration with nodes and connections
+ * @param ctx - Tool handler context with canvas manipulation functions
+ * @returns Success status and summary of created elements
+ *
+ * @see /app/workflow/page.tsx - Disabled React Flow workflow page (different system)
+ * @see /lib/workflow-types.ts - React Flow types (not used here)
+ */
 export function handleCreateWorkflow(
   args: CreateWorkflowInput,
   ctx: ToolHandlerContext,

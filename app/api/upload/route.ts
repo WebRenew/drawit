@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import DOMPurify from "isomorphic-dompurify"
 
 // Security constants
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
@@ -20,29 +21,67 @@ const IMAGE_SIGNATURES: Record<string, number[][]> = {
 }
 
 /**
- * Validate file magic numbers to prevent MIME type spoofing
+ * Sanitize SVG content to prevent XSS attacks
+ * Removes script tags, event handlers, and other dangerous content
  */
-async function validateImageSignature(file: File): Promise<boolean> {
+function sanitizeSVG(svgContent: string): string {
+  // Configure DOMPurify for SVG sanitization
+  const cleanSVG = DOMPurify.sanitize(svgContent, {
+    USE_PROFILES: { svg: true, svgFilters: true },
+    ADD_TAGS: ['use'], // Allow use tag for SVG references
+    ADD_ATTR: ['target'], // Allow target attribute for links
+    FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'base', 'link', 'style'],
+    FORBID_ATTR: [
+      'onerror', 'onload', 'onclick', 'onmouseover', 'onmouseout',
+      'onmousemove', 'onmouseenter', 'onmouseleave', 'onfocus', 'onblur',
+      'onchange', 'onsubmit', 'onkeydown', 'onkeyup', 'onkeypress'
+    ],
+  })
+
+  return cleanSVG
+}
+
+/**
+ * Validate file magic numbers to prevent MIME type spoofing
+ * Returns sanitized content for SVGs, null for other valid files
+ */
+async function validateImageSignature(file: File): Promise<{ valid: boolean; sanitizedContent?: string }> {
   const mimeType = file.type
   const signatures = IMAGE_SIGNATURES[mimeType]
 
   // SVG doesn't have magic numbers - validate by checking for XML/SVG content
   if (mimeType === "image/svg+xml") {
-    const text = await file.slice(0, 500).text()
-    return text.includes("<svg") || text.includes("<?xml")
+    const text = await file.text()
+    const isValidSVG = text.includes("<svg") || text.includes("<?xml")
+
+    if (!isValidSVG) {
+      return { valid: false }
+    }
+
+    // Sanitize SVG content to prevent XSS
+    const sanitizedContent = sanitizeSVG(text)
+
+    // Verify sanitization didn't completely remove content
+    if (!sanitizedContent || sanitizedContent.length < 10) {
+      return { valid: false }
+    }
+
+    return { valid: true, sanitizedContent }
   }
 
   // If no signature defined for this type, skip magic number check
   if (!signatures) {
-    return true
+    return { valid: true }
   }
 
   const buffer = await file.slice(0, 12).arrayBuffer()
   const bytes = new Uint8Array(buffer)
 
-  return signatures.some(signature =>
+  const isValid = signatures.some(signature =>
     signature.every((byte, index) => bytes[index] === byte)
   )
+
+  return { valid: isValid }
 }
 
 export async function POST(request: Request) {
@@ -79,8 +118,8 @@ export async function POST(request: Request) {
     }
 
     // Validate magic numbers to prevent MIME type spoofing
-    const isValidSignature = await validateImageSignature(file)
-    if (!isValidSignature) {
+    const validationResult = await validateImageSignature(file)
+    if (!validationResult.valid) {
       return NextResponse.json(
         { error: "File content does not match declared type" },
         { status: 400 }
@@ -92,10 +131,15 @@ export async function POST(request: Request) {
     const randomId = crypto.randomUUID()
     const fileName = `${user.id}/${Date.now()}-${randomId}.${fileExt}`
 
+    // Use sanitized content for SVGs, original file for other types
+    const uploadContent = validationResult.sanitizedContent
+      ? new Blob([validationResult.sanitizedContent], { type: file.type })
+      : file
+
     // Upload to Supabase Storage
     const { data, error } = await supabase.storage
       .from("images")
-      .upload(fileName, file, {
+      .upload(fileName, uploadContent, {
         contentType: file.type,
         upsert: false,
       })

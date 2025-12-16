@@ -87,6 +87,13 @@ You are an expert diagram visualization assistant embedded in an interactive whi
 
 ${canvasStateSection}
 
+# CANVAS ARCHITECTURE (IMPORTANT)
+All tools create SVG canvas elements (CanvasElement objects), NOT React Flow nodes.
+- The canvas is a custom SVG implementation at components/editor/canvas.tsx
+- React Flow is only used for connection path rendering (bezier, smoothstep curves)
+- All diagram elements you create are standard shapes: rectangles, ellipses, diamonds, etc.
+- These shapes are fully editable, movable, and resizable by the user after creation
+
 # TOOL REGISTRY
 
 ## Context Tools (call first)

@@ -4,6 +4,40 @@ import { MessageSquare, Loader2, Brain } from "lucide-react"
 import type { UIMessage } from "ai"
 import ReactMarkdown from "react-markdown"
 
+/**
+ * Sanitize image URLs to prevent XSS attacks
+ * Only allows http:, https:, and data:image/ URLs
+ */
+function sanitizeImageUrl(url: string | undefined): string {
+  if (!url) return "/placeholder.svg"
+
+  try {
+    // Handle data URLs
+    if (url.startsWith("data:")) {
+      // Only allow data URLs with image MIME types
+      if (url.startsWith("data:image/")) {
+        return url
+      }
+      console.warn("[chat-messages] Blocked non-image data URL")
+      return "/placeholder.svg"
+    }
+
+    // Validate URL and protocol
+    const parsed = new URL(url)
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return url
+    }
+
+    // Block javascript:, file:, and other dangerous protocols
+    console.warn("[chat-messages] Blocked unsafe URL protocol:", parsed.protocol)
+    return "/placeholder.svg"
+  } catch (error) {
+    // Invalid URL
+    console.warn("[chat-messages] Invalid image URL:", error)
+    return "/placeholder.svg"
+  }
+}
+
 interface ChatMessagesProps {
   messages: UIMessage[]
   isLoading: boolean
@@ -81,10 +115,11 @@ export function ChatMessages({ messages, isLoading }: ChatMessagesProps) {
 
               // Handle file parts (images)
               if (part.type === "file") {
+                const sanitizedUrl = sanitizeImageUrl(part.url)
                 return (
                   <div key={index} className="mt-2">
                     <img
-                      src={part.url || "/placeholder.svg"}
+                      src={sanitizedUrl}
                       alt={part.filename || "Uploaded image"}
                       className="max-w-full rounded"
                     />

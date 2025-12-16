@@ -1,5 +1,34 @@
 "use client"
 
+/**
+ * SMART CONNECTOR LAYER
+ *
+ * This component uses React Flow ONLY for connection path rendering, not for node management.
+ *
+ * Why React Flow is used here:
+ * - React Flow provides excellent path algorithms (bezier, smoothstep, straight)
+ * - It handles connection routing, edge labels, and arrow heads automatically
+ * - We leverage its rendering engine without using its node management features
+ *
+ * How it works:
+ * 1. Creates INVISIBLE React Flow nodes at each canvas element's position
+ * 2. These nodes have transparent handles (top, bottom, left, right)
+ * 3. React Flow edges connect these invisible nodes
+ * 4. The connection paths are rendered, but nodes remain invisible
+ * 5. All actual shape rendering happens in the main canvas (canvas.tsx)
+ *
+ * IMPORTANT: This is NOT a full React Flow canvas implementation.
+ * - Canvas elements are managed by Zustand store (lib/store.ts)
+ * - Shapes are rendered as SVG in canvas.tsx
+ * - This component ONLY renders the connection lines between shapes
+ * - All AI tools create canvas elements, not React Flow nodes
+ *
+ * @see /components/editor/canvas.tsx - Main SVG canvas (shapes rendered here)
+ * @see /lib/types.ts - CanvasElement and SmartConnection types
+ * @see /lib/store.ts - Zustand state management
+ * @see /app/workflow/page.tsx - Disabled React Flow canvas (different system)
+ */
+
 import type React from "react"
 
 import { useMemo, useCallback, forwardRef, useImperativeHandle, memo } from "react"
@@ -24,8 +53,12 @@ import "@xyflow/react/dist/style.css"
 import type { CanvasElement, SmartConnection, Viewport, HandlePosition } from "@/lib/types"
 import { getSolidStrokeColor } from "@/lib/canvas-helpers"
 
-// Custom invisible node with handles at all 4 positions
-// React Flow edges require nodes to have Handle components with matching IDs
+/**
+ * InvisibleNode - Transparent React Flow node used only for connection anchoring
+ *
+ * These nodes are positioned at canvas element locations but remain invisible.
+ * They provide handle points for React Flow edges to connect to.
+ */
 interface InvisibleNodeData extends Record<string, unknown> {
   width: number
   height: number
