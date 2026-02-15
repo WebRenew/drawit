@@ -16,6 +16,12 @@ import type { CanvasElement, SmartConnection } from "@/lib/types"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 
 export const maxDuration = 60
+const AI_CHAT_DEBUG = process.env.AI_CHAT_DEBUG === "1"
+
+function debugLog(...args: unknown[]) {
+  if (!AI_CHAT_DEBUG) return
+  console.log(...args)
+}
 
 /**
  * Transform messages to handle file->image part conversion for v6 compatibility.
@@ -33,7 +39,7 @@ function transformMessagesForV6(messages: UIMessage[]): UIMessage[] {
 
     // Debug: Log what parts we're receiving
     const partTypes = msg.parts.map((p) => (p as { type?: string }).type)
-    console.log("[ai-chat] Message parts types:", partTypes)
+    debugLog("[ai-chat] Message parts types:", partTypes)
 
     const transformedParts = msg.parts.map((part) => {
       const typedPart = part as { type?: string; mediaType?: string; data?: string; url?: string; image?: string }
@@ -42,7 +48,7 @@ function transformMessagesForV6(messages: UIMessage[]): UIMessage[] {
       if (typedPart.type === "file" && typeof typedPart.mediaType === "string" && typedPart.mediaType.startsWith("image/")) {
         const dataUrl = typedPart.data || typedPart.url
         if (typeof dataUrl === "string") {
-          console.log("[ai-chat] Transforming file part to image part")
+          debugLog("[ai-chat] Transforming file part to image part")
           return {
             type: "image" as const,
             image: dataUrl,
@@ -51,7 +57,7 @@ function transformMessagesForV6(messages: UIMessage[]): UIMessage[] {
       }
       // Handle image parts (v6 format) - pass through
       if (typedPart.type === "image") {
-        console.log("[ai-chat] Image part detected (already correct format)")
+        debugLog("[ai-chat] Image part detected (already correct format)")
         return part
       }
       return part
@@ -266,7 +272,16 @@ export async function POST(req: Request) {
       ? createCanvasContextString(elements, connections)
       : undefined
 
-    console.log("[ai-chat] Request - user:", user.id, "model:", selectedModelId, "messages:", messages.length, "elements:", elements?.length ?? 0)
+    debugLog(
+      "[ai-chat] Request - user:",
+      user.id,
+      "model:",
+      selectedModelId,
+      "messages:",
+      messages.length,
+      "elements:",
+      elements?.length ?? 0,
+    )
 
     // Transform messages to handle v5->v6 format differences (file->image parts)
     const transformedMessages = transformMessagesForV6(messages)
@@ -283,7 +298,7 @@ export async function POST(req: Request) {
       // in AIChatPanel. This allows tool execution to mutate client state.
     })
 
-    console.log("[ai-chat] streamText called, returning response")
+    debugLog("[ai-chat] streamText called, returning response")
     return result.toUIMessageStreamResponse()
   } catch (error) {
     console.error("[ai-chat] API error:", error)
