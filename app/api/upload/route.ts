@@ -3,7 +3,7 @@ import { NextResponse } from "next/server"
 import sanitizeHtml from "sanitize-html"
 
 // Security constants
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB (matches temp-images bucket limit)
 const STORAGE_BUCKET = "temp-images"
 const ALLOWED_MIME_TYPES = [
   "image/jpeg",
