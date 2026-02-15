@@ -611,7 +611,7 @@ export function AIChatPanel({ canvasDimensions }: AIChatPanelProps) {
 
         console.log("[v0] Uploading images to Supabase:", filesToUpload.length)
 
-        const uploadResults = await imageService.uploadImages(filesToUpload, user.id)
+        const uploadResults = await imageService.uploadImages(filesToUpload)
         const successfulUploads = uploadResults.filter(r => r.success && r.url)
 
         if (successfulUploads.length === 0) {

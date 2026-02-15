@@ -3,7 +3,8 @@ import { NextResponse } from "next/server"
 import sanitizeHtml from "sanitize-html"
 
 // Security constants
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB (matches temp-images bucket limit)
+const STORAGE_BUCKET = "temp-images"
 const ALLOWED_MIME_TYPES = [
   "image/jpeg",
   "image/png",
@@ -118,8 +119,11 @@ async function validateImageSignature(file: File): Promise<{ valid: boolean; san
 }
 
 export async function POST(request: Request) {
+  let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>> | null = null
+  let uploadedPath: string | null = null
+
   try {
-    const supabase = await createServerSupabaseClient()
+    supabase = await createServerSupabaseClient()
 
     // Check if user is authenticated
     const { data: { user } } = await supabase.auth.getUser()
@@ -171,7 +175,7 @@ export async function POST(request: Request) {
 
     // Upload to Supabase Storage
     const { data, error } = await supabase.storage
-      .from("images")
+      .from(STORAGE_BUCKET)
       .upload(fileName, uploadContent, {
         contentType: file.type,
         upsert: false,
@@ -181,15 +185,50 @@ export async function POST(request: Request) {
       console.error("[upload] Storage error:", error)
       return NextResponse.json({ error: "Failed to upload file" }, { status: 500 })
     }
+    uploadedPath = data.path
 
     // Get public URL
     const { data: { publicUrl } } = supabase.storage
-      .from("images")
+      .from(STORAGE_BUCKET)
       .getPublicUrl(data.path)
 
-    return NextResponse.json({ url: publicUrl })
+    const { error: metadataError } = await supabase.from("temp_images").insert({
+      user_id: user.id,
+      storage_path: data.path,
+      public_url: publicUrl,
+      file_name: file.name,
+      file_size: file.size,
+      mime_type: file.type,
+    })
+
+    if (metadataError) {
+      console.error("[upload] Failed to register temp image metadata:", metadataError)
+
+      const { error: cleanupError } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .remove([data.path])
+
+      if (cleanupError) {
+        console.error("[upload] Failed to remove untracked uploaded file:", cleanupError)
+      }
+
+      return NextResponse.json({ error: "Failed to register uploaded file" }, { status: 500 })
+    }
+
+    return NextResponse.json({ url: publicUrl, storagePath: data.path })
   } catch (error) {
     console.error("[upload] Error:", error)
+
+    if (supabase && uploadedPath) {
+      const { error: cleanupError } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .remove([uploadedPath])
+
+      if (cleanupError) {
+        console.error("[upload] Failed to clean up uploaded file after exception:", cleanupError)
+      }
+    }
+
     return NextResponse.json({ error: "Failed to upload file" }, { status: 500 })
   }
 }
