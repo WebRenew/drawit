@@ -119,8 +119,11 @@ async function validateImageSignature(file: File): Promise<{ valid: boolean; san
 }
 
 export async function POST(request: Request) {
+  let supabase: Awaited<ReturnType<typeof createServerSupabaseClient>> | null = null
+  let uploadedPath: string | null = null
+
   try {
-    const supabase = await createServerSupabaseClient()
+    supabase = await createServerSupabaseClient()
 
     // Check if user is authenticated
     const { data: { user } } = await supabase.auth.getUser()
@@ -182,6 +185,7 @@ export async function POST(request: Request) {
       console.error("[upload] Storage error:", error)
       return NextResponse.json({ error: "Failed to upload file" }, { status: 500 })
     }
+    uploadedPath = data.path
 
     // Get public URL
     const { data: { publicUrl } } = supabase.storage
@@ -214,6 +218,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ url: publicUrl, storagePath: data.path })
   } catch (error) {
     console.error("[upload] Error:", error)
+
+    if (supabase && uploadedPath) {
+      const { error: cleanupError } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .remove([uploadedPath])
+
+      if (cleanupError) {
+        console.error("[upload] Failed to clean up uploaded file after exception:", cleanupError)
+      }
+    }
+
     return NextResponse.json({ error: "Failed to upload file" }, { status: 500 })
   }
 }
