@@ -19,12 +19,12 @@ interface WorkflowAIChatProps {
 
 interface CreateWorkflowToolResult {
   success?: boolean
+  message?: string
   nodeIds?: string[]
   error?: string
 }
 
 const generateEdgeId = () => `edge_${crypto.randomUUID()}`
-
 export function WorkflowAIChat({ canvasRef }: WorkflowAIChatProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [localInput, setLocalInput] = useState("")
@@ -42,6 +42,11 @@ export function WorkflowAIChat({ canvasRef }: WorkflowAIChatProps) {
         }
 
         try {
+          const canvas = canvasRef.current
+          if (!canvas) {
+            throw new Error("Workflow canvas is not mounted on this page.")
+          }
+
           const edges =
             input.edges && input.edges.length
               ? input.edges
@@ -53,7 +58,7 @@ export function WorkflowAIChat({ canvasRef }: WorkflowAIChatProps) {
                   animated: connection.animated ?? true,
                 }))
 
-          canvasRef.current?.addWorkflow({ nodes: input.nodes, edges }, input.autoLayout ?? true)
+          canvas.addWorkflow({ nodes: input.nodes, edges }, input.autoLayout ?? true)
 
           addToolResult({
             tool: "createWorkflow",
