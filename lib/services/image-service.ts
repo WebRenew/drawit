@@ -1,10 +1,9 @@
 /**
  * Image Service
- * Handles uploading images to Supabase Storage for AI chat
+ * Handles uploading images for AI chat.
  */
 
 import { createClient } from "@/lib/supabase/client"
-import { nanoid } from "nanoid"
 
 const BUCKET_NAME = "temp-images"
 
@@ -31,59 +30,26 @@ class ImageService {
   private supabase = createClient()
 
   /**
-   * Upload an image file to Supabase Storage
-   * Returns a public URL that the AI can access
+   * Upload an image file through the validated server upload endpoint.
    */
-  async uploadImage(file: File, userId: string): Promise<UploadedImageResult> {
+  async uploadImage(file: File): Promise<UploadedImageResult> {
     try {
-      // Generate unique path: userId/timestamp_randomId.ext
-      const fileExt = file.name.split(".").pop() || "png"
-      const fileName = `${Date.now()}_${nanoid(8)}.${fileExt}`
-      const storagePath = `${userId}/${fileName}`
+      const formData = new FormData()
+      formData.set("file", file)
 
-      // Upload to Supabase Storage
-      const { data: _data, error } = await this.supabase.storage
-        .from(BUCKET_NAME)
-        .upload(storagePath, file, {
-          contentType: file.type,
-          cacheControl: "3600", // 1 hour cache
-          upsert: false,
-        })
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      })
 
-      if (error) {
-        console.error("[ImageService] Upload error:", error)
-        return { success: false, error: error.message }
+      const payload = (await response.json()) as { url?: string; error?: string }
+      if (!response.ok || !payload.url) {
+        return { success: false, error: payload.error || "Upload failed" }
       }
 
-      // Get public URL
-      const { data: urlData } = this.supabase.storage
-        .from(BUCKET_NAME)
-        .getPublicUrl(storagePath)
-
-      const publicUrl = urlData.publicUrl
-
-      // Record in temp_images table for tracking/cleanup
-      const { error: recordError } = await this.supabase
-        .from("temp_images")
-        .insert({
-          user_id: userId,
-          storage_path: storagePath,
-          public_url: publicUrl,
-          file_name: file.name,
-          file_size: file.size,
-          mime_type: file.type,
-        })
-
-      if (recordError) {
-        console.warn("[ImageService] Failed to record image metadata:", recordError)
-        // Don't fail the upload, just log the warning
-      }
-
-      console.log("[ImageService] Image uploaded:", publicUrl)
       return {
         success: true,
-        url: publicUrl,
-        storagePath,
+        url: payload.url,
       }
     } catch (err) {
       console.error("[ImageService] Unexpected error:", err)
@@ -97,8 +63,8 @@ class ImageService {
   /**
    * Upload multiple images
    */
-  async uploadImages(files: File[], userId: string): Promise<UploadedImageResult[]> {
-    return Promise.all(files.map((file) => this.uploadImage(file, userId)))
+  async uploadImages(files: File[]): Promise<UploadedImageResult[]> {
+    return Promise.all(files.map((file) => this.uploadImage(file)))
   }
 
   /**
@@ -168,8 +134,6 @@ class ImageService {
 }
 
 export const imageService = new ImageService()
-
-
 
 
 
