@@ -1,7 +1,8 @@
 "use client"
 
 import { useRef } from "react"
-// import { WorkflowCanvas, type WorkflowCanvasHandle } from "@/components/workflow/workflow-canvas"
+// import { WorkflowCanvas } from "@/components/workflow/workflow-canvas"
+import type { WorkflowCanvasHandle } from "@/components/workflow/workflow-canvas"
 import { WorkflowAIChat } from "@/components/workflow/workflow-ai-chat"
 
 /**
@@ -31,7 +32,7 @@ import { WorkflowAIChat } from "@/components/workflow/workflow-ai-chat"
  * @see /components/editor/smart-connector-layer.tsx - React Flow for paths only
  */
 export default function WorkflowPage() {
-  const canvasRef = useRef<any>(null)
+  const canvasRef = useRef<WorkflowCanvasHandle | null>(null)
 
   return (
     <main className="w-screen h-screen overflow-hidden bg-background relative">
