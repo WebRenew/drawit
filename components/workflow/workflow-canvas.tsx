@@ -87,11 +87,12 @@ export const WorkflowCanvas = forwardRef<WorkflowCanvasHandle, WorkflowCanvasPro
   }, [])
 
   useEffect(() => {
+    const handles = timeoutHandlesRef.current
     return () => {
-      for (const handle of timeoutHandlesRef.current) {
+      for (const handle of handles) {
         clearTimeout(handle)
       }
-      timeoutHandlesRef.current.clear()
+      handles.clear()
     }
   }, [])
 
