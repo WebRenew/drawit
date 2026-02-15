@@ -125,7 +125,7 @@ export function ChatMessages({ messages, isLoading }: ChatMessagesProps) {
                       width={480}
                       height={320}
                       unoptimized
-                      className="max-w-full h-auto rounded"
+                      className="w-auto max-w-full h-auto rounded"
                     />
                   </div>
                 )
