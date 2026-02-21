@@ -40,27 +40,6 @@ import {
   usePersistMessagesOnChange,
 } from "@/components/ai-chat/hooks/use-chat-sync"
 
-// Tool handlers
-import {
-  handleGetCanvasState,
-  handleCreateFlowchart,
-  handleCreateOrgChart,
-  handleCreateERDiagram,
-  handleCreateNetworkDiagram,
-  handleCreateMolecule,
-  handleCreateShape,
-  handleUpdateShape,
-  handleGetShapeInfo,
-  handlePlaceImage,
-  handleClearCanvas,
-  handleAnalyzeDiagram,
-  handleBeautifyDiagram,
-  handlePreviewDiagram,
-  handleUpdateStyles,
-  handleCreateMindMap,
-  handleCreateWorkflow,
-} from "@/lib/ai-chat/tool-handlers"
-
 // Connection utilities for proper SmartConnection creation
 import { convertBackgroundConnections } from "@/lib/ai-chat/connection-helpers"
 
@@ -105,6 +84,7 @@ function mapDiagramTypeToCanvasType(diagramType: string): CanvasElement["type"] 
 
 const CHAT_HISTORY_LOCAL_KEY = "drawit-chat-history"
 const SAVE_DEBOUNCE_MS = 2000
+type ToolHandlersModule = typeof import("@/lib/ai-chat/tool-handlers")
 
 export function AIChatPanel({ canvasDimensions }: AIChatPanelProps) {
   const [isOpen, setIsOpen] = useState(false)
@@ -146,6 +126,14 @@ export function AIChatPanel({ canvasDimensions }: AIChatPanelProps) {
 
   const shapeRegistryRef = useRef<ShapeRegistry>(new Map())
   const shapeDataRef = useRef<ShapeDataRegistry>(new Map())
+  const toolHandlersRef = useRef<ToolHandlersModule | null>(null)
+
+  const getToolHandlers = useCallback(async (): Promise<ToolHandlersModule> => {
+    if (!toolHandlersRef.current) {
+      toolHandlersRef.current = await import("@/lib/ai-chat/tool-handlers")
+    }
+    return toolHandlersRef.current
+  }, [])
 
   const elementsRef = useRef<CanvasElement[]>(elements)
   useEffect(() => {
@@ -247,58 +235,59 @@ export function AIChatPanel({ canvasDimensions }: AIChatPanelProps) {
 
       try {
         let result: unknown
+        const handlers = await getToolHandlers()
 
         switch (toolCall.toolName) {
           case "getCanvasState":
-            result = handleGetCanvasState(toolContext)
+            result = handlers.handleGetCanvasState(toolContext)
             break
           case "createFlowchart":
-            result = handleCreateFlowchart(args, toolContext)
+            result = handlers.handleCreateFlowchart(args, toolContext)
             break
           case "createWorkflow":
-            result = handleCreateWorkflow(args, toolContext)
+            result = handlers.handleCreateWorkflow(args, toolContext)
             break
           case "createMindMap":
-            result = handleCreateMindMap(args, toolContext)
+            result = handlers.handleCreateMindMap(args, toolContext)
             break
           case "createOrgChart":
-            result = handleCreateOrgChart(args, toolContext)
+            result = handlers.handleCreateOrgChart(args, toolContext)
             break
           case "createERDiagram":
-            result = handleCreateERDiagram(args, toolContext)
+            result = handlers.handleCreateERDiagram(args, toolContext)
             break
           case "createNetworkDiagram":
-            result = handleCreateNetworkDiagram(args, toolContext)
+            result = handlers.handleCreateNetworkDiagram(args, toolContext)
             break
           case "createMolecule":
-            result = handleCreateMolecule(args, toolContext)
+            result = handlers.handleCreateMolecule(args, toolContext)
             break
           case "createShape":
-            result = handleCreateShape(args, toolContext)
+            result = handlers.handleCreateShape(args, toolContext)
             break
           case "updateShape":
-            result = handleUpdateShape(args, toolContext)
+            result = handlers.handleUpdateShape(args, toolContext)
             break
           case "getShapeInfo":
-            result = handleGetShapeInfo(args, toolContext)
+            result = handlers.handleGetShapeInfo(args, toolContext)
             break
           case "placeImage":
-            result = await handlePlaceImage(args, toolContext)
+            result = await handlers.handlePlaceImage(args, toolContext)
             break
           case "clearCanvas":
-            result = handleClearCanvas(toolContext)
+            result = handlers.handleClearCanvas(toolContext)
             break
           case "updateStyles":
-            result = handleUpdateStyles(args, toolContext)
+            result = handlers.handleUpdateStyles(args, toolContext)
             break
           case "analyzeDiagram":
-            result = handleAnalyzeDiagram(toolContext)
+            result = handlers.handleAnalyzeDiagram(toolContext)
             break
           case "beautifyDiagram":
-            result = handleBeautifyDiagram(toolContext)
+            result = handlers.handleBeautifyDiagram(toolContext)
             break
           case "previewDiagram":
-            result = handlePreviewDiagram(args)
+            result = handlers.handlePreviewDiagram(args)
             break
           case "runBackgroundDiagram": {
             // Handle background diagram generation via Trigger.dev
