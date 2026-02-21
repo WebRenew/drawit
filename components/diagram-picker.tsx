@@ -52,19 +52,17 @@ interface DiagramPickerProps {
 
 export function DiagramPicker({ className }: DiagramPickerProps) {
   const { user } = useAuth()
-  const {
-    currentDiagram,
-    currentDiagramId,
-    isSaving,
-    lastSaved,
-    isLoading,
-    loadDiagram,
-    createNewDiagram,
-    closeDiagram,
-    saveDiagram,
-    updateDiagramTitle,
-    clearAll,
-  } = useCanvasStore()
+  const currentDiagram = useCanvasStore((state) => state.currentDiagram)
+  const currentDiagramId = useCanvasStore((state) => state.currentDiagramId)
+  const isSaving = useCanvasStore((state) => state.isSaving)
+  const lastSaved = useCanvasStore((state) => state.lastSaved)
+  const isLoading = useCanvasStore((state) => state.isLoading)
+  const loadDiagram = useCanvasStore((state) => state.loadDiagram)
+  const createNewDiagram = useCanvasStore((state) => state.createNewDiagram)
+  const closeDiagram = useCanvasStore((state) => state.closeDiagram)
+  const saveDiagram = useCanvasStore((state) => state.saveDiagram)
+  const updateDiagramTitle = useCanvasStore((state) => state.updateDiagramTitle)
+  const clearAll = useCanvasStore((state) => state.clearAll)
 
   const [isOpen, setIsOpen] = useState(false)
   const [diagrams, setDiagrams] = useState<Diagram[]>([])
@@ -370,4 +368,3 @@ export function DiagramPicker({ className }: DiagramPickerProps) {
     </>
   )
 }
-
